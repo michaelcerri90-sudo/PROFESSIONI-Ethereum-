@@ -178,6 +178,7 @@ async function caricaRicettario() {
       fetch("../dati/mastercraft.json").then(r => r.json()),
     ]);
     const info = mc.recipes[d.prof] || {};
+    d.recipes = d.recipes.filter(r => info[r.name]);
     d.recipes.forEach(r => {
       r.reag.forEach(g => { g.n = g.n || mc.items[g.id] || null; });
       const ri = info[r.name];

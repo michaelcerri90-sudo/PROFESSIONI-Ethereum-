@@ -88,7 +88,7 @@ input[type=text],select{font:inherit;color:var(--ink);background:var(--bg);borde
 const RELAY = "https://professioniethereum.michael-cerri90.workers.dev";
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-const RACCOLTA = ["Herbalism", "Skinning", "Fishing", "Mining"];
+const RACCOLTA = ["Herbalism", "Skinning", "Fishing", "Mining", "First Aid"];
 
 // --- link personale dal bot ---
 const prendiToken = s => (String(s || "").match(/[#?&]t=([\w.-]+)/) || [])[1] || "";

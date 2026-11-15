@@ -209,6 +209,7 @@ function costruisci(art, mc) {
   };
   for (const a of art) {
     for (const r of a.recipes || []) {
+      if (!info[r.name]) continue; // non esiste su Forever
       const x = prendi(r.name);
       x.cat = x.cat || r.cat; x.qty = r.qty || x.qty;
       if (!x.reag && r.reag && r.reag.length) x.reag = r.reag;
