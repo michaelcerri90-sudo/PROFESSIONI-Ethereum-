@@ -1,0 +1,366 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Ricettario di ...</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="Ricettario di gilda su WoW: Forever: ricette, materiali e richieste di craft su Discord.">
+<meta property="og:title" content="Ricettario di ...">
+<meta property="og:description" content="Ricettario di gilda su WoW: Forever: ricette, materiali e richieste di craft su Discord.">
+<meta property="og:type" content="website">
+<meta name="theme-color" content="#ffd000">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alegreya+SC:wght@500;700&family=Alegreya+Sans:wght@400;500;700&display=swap">
+<style>
+/* Layout: una finestra professione di WoW resa pagina. Riga di chat col link [Alchimia] in testa,
+   barra filtri, elenco ricette a sinistra e scheda della ricetta a destra (foglio dal basso sul telefono).
+   Look scuro scelto apposta: e' il mondo dell'interfaccia del gioco. */
+:root{
+  color-scheme: dark;
+  --bg:#0d1117;          /* fondo, nero con un filo di blu */
+  --panel:#151b24;       /* pannelli */
+  --panel-2:#1c2430;     /* righe in hover, campi */
+  --line:#2a3442;        /* bordi */
+  --ink:#e9e3d2;         /* testo, pergamena chiara */
+  --muted:#9aa3ae;       /* testo secondario */
+  --gold:#ffd000;        /* colore vero dei link professione in chat (|cffffd000) */
+  --gold-soft:rgba(255,208,0,.12);
+  /* colori di difficolta' delle ricette, quelli del gioco */
+  --d-optimal:#ff8040; --d-medium:#ffff00; --d-easy:#40c040; --d-trivial:#8a8a8a;
+  --unknown:#5d6672;
+  --font-display:"Alegreya SC", "Palatino Linotype", Georgia, serif;
+  --font-body:"Alegreya Sans", "Segoe UI", system-ui, sans-serif;
+}
+*{box-sizing:border-box}
+html,body{background:var(--bg)}
+body{color:var(--ink);font-family:var(--font-body);font-size:16px;line-height:1.45;
+  padding-left:max(16px, env(safe-area-inset-left, 0px));padding-right:max(16px, env(safe-area-inset-right, 0px));padding-block:20px 40px}
+.wrap{max-width:1180px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
+h1,h2,h3{font-family:var(--font-display);font-weight:700;text-wrap:balance;margin:0;letter-spacing:.01em}
+button,input{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+
+/* testata */
+.chat{font-size:15px;color:#ff7ffe;background:rgba(0,0,0,.35);border:1px solid var(--line);border-radius:4px;padding:8px 12px;align-self:flex-start;max-width:100%;overflow-wrap:anywhere}
+.chat .who{color:#ff7ffe}
+.chat button.trade{background:none;border:0;padding:0;color:var(--gold);cursor:pointer;font-weight:500}
+.chat button.trade:hover{text-decoration:underline}
+.head{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:16px 32px}
+.head h1{font-size:clamp(30px,5vw,46px);line-height:1.05}
+.head h1 small{display:block;font-family:var(--font-body);font-size:15px;font-weight:500;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;margin-bottom:6px}
+.head h1 small a{color:var(--gold);text-decoration:none}
+.head h1 small a:hover{text-decoration:underline}
+.stats{display:flex;gap:28px;flex-wrap:wrap}
+.stat{display:flex;flex-direction:column;gap:2px;min-width:120px}
+.stat b{font-family:var(--font-display);font-size:28px;font-variant-numeric:tabular-nums;color:var(--gold);line-height:1}
+.stat span{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.meter{height:6px;background:var(--panel-2);border-radius:3px;overflow:hidden;margin-top:6px}
+.meter i{display:block;height:100%;background:var(--gold)}
+
+/* filtri */
+.tools{display:flex;flex-wrap:wrap;gap:10px;align-items:center;background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:10px}
+.search{flex:1 1 220px;min-width:0;background:var(--bg);border:1px solid var(--line);border-radius:4px;padding:8px 10px}
+.search::placeholder{color:var(--muted)}
+.seg{display:flex;flex-wrap:wrap;max-width:100%;border:1px solid var(--line);border-radius:4px;overflow:hidden}
+.seg button{background:transparent;border:0;padding:8px 12px;cursor:pointer;color:var(--muted);white-space:nowrap}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button[aria-pressed="true"]{background:var(--gold-soft);color:var(--gold)}
+.chips{display:flex;flex-wrap:wrap;gap:6px;width:100%}
+.chip{background:transparent;border:1px solid var(--line);border-radius:999px;padding:3px 10px;font-size:14px;color:var(--muted);cursor:pointer}
+.chip[aria-pressed="true"]{border-color:var(--gold);color:var(--gold)}
+.chip em{font-style:normal;font-variant-numeric:tabular-nums;opacity:.75;margin-left:4px}
+
+/* corpo */
+.main{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr);gap:18px;align-items:start}
+.list{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:6px 0;min-width:0}
+.group h2{font-size:15px;color:var(--muted);letter-spacing:.06em;padding:12px 14px 4px;display:flex;justify-content:space-between;gap:8px}
+.group h2 span{font-family:var(--font-body);font-weight:500;font-variant-numeric:tabular-nums;font-size:13px}
+.row{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:transparent;border:0;padding:6px 14px;cursor:pointer;min-width:0}
+.row:hover{background:var(--panel-2)}
+.row[aria-current="true"]{background:var(--gold-soft);box-shadow:inset 3px 0 0 var(--gold)}
+.row .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.row .tag{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
+.row.unk .nm{color:var(--unknown)}
+.vial{flex:none;width:18px;height:18px}
+.d-optimal{color:var(--d-optimal)} .d-medium{color:var(--d-medium)} .d-easy{color:var(--d-easy)} .d-trivial{color:var(--d-trivial)}
+.empty{padding:24px 14px;color:var(--muted)}
+
+.detail{position:sticky;top:max(16px, env(safe-area-inset-top, 0px));background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:20px;display:flex;flex-direction:column;gap:16px;min-width:0}
+.detail .top{display:flex;gap:14px;align-items:flex-start}
+.detail .top .vial{width:44px;height:44px}
+.detail h3{font-size:26px;line-height:1.1}
+.detail .sub{color:var(--muted);font-size:14px;margin-top:4px}
+.badge{display:inline-block;font-size:12px;letter-spacing:.06em;text-transform:uppercase;padding:2px 8px;border-radius:3px;border:1px solid currentColor;margin-top:8px}
+.badge.ok{color:var(--d-easy)} .badge.no{color:var(--unknown)}
+.label{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+.reag{list-style:none;margin:0;padding:0;display:grid;gap:4px}
+.reag li{display:flex;justify-content:space-between;gap:12px;padding:6px 10px;background:var(--bg);border:1px solid var(--line);border-radius:4px;min-width:0}
+.reag li span:first-child{min-width:0;overflow-wrap:anywhere}
+.reag b{font-variant-numeric:tabular-nums;color:var(--gold);white-space:nowrap}
+.skillbar{position:relative;height:12px;border-radius:2px;overflow:hidden;background:var(--bg);border:1px solid var(--line)}
+.skillbar i{position:absolute;top:0;bottom:0}
+.ticks{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums;margin-top:4px}
+.src{font-size:15px;white-space:pre-line;overflow-wrap:anywhere}
+.src strong{color:var(--ink)}
+.req{display:flex;flex-direction:column;gap:10px;background:var(--bg);border:1px dashed var(--line);border-radius:6px;padding:12px}
+.req .line{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.qty{display:flex;align-items:center;border:1px solid var(--line);border-radius:4px;overflow:hidden}
+.qty button{background:var(--panel-2);border:0;width:34px;height:34px;cursor:pointer;font-size:18px}
+.qty input{width:52px;height:34px;text-align:center;background:transparent;border:0;font-variant-numeric:tabular-nums}
+.copy{background:var(--gold);color:#1a1400;border:0;border-radius:4px;padding:8px 14px;font-weight:700;cursor:pointer}
+.copy:hover{filter:brightness(1.08)}
+a.copy{text-decoration:none;display:inline-block}
+.copy.alt{background:transparent;color:var(--gold);border:1px solid var(--gold)}
+.req textarea{width:100%;min-height:92px;resize:vertical;background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:4px;padding:8px;font:inherit;font-size:14px}
+.note{font-size:13px;color:var(--muted)}
+.close{display:none}
+footer{color:var(--muted);font-size:13px}
+
+@media (max-width: 820px){
+  .main{grid-template-columns:minmax(0,1fr)}
+  .detail{position:fixed;left:0;right:0;bottom:0;top:auto;max-height:82vh;overflow:auto;border-radius:12px 12px 0 0;
+    padding:18px max(16px, env(safe-area-inset-right, 0px)) calc(18px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
+    box-shadow:0 -12px 40px rgba(0,0,0,.6);z-index:20}
+  .detail[data-open="false"]{display:none}
+  .close{display:block;align-self:flex-end;background:var(--panel-2);border:1px solid var(--line);border-radius:4px;padding:4px 12px;cursor:pointer}
+}
+@media (prefers-reduced-motion: no-preference){ .row{transition:background .12s} }
+</style>
+
+<div class="wrap">
+  <div class="chat" aria-label="Messaggio di chat">
+    <span class="who" id="who">[...]:</span> <button class="trade" type="button" id="tradeLink">[Ricettario]</button> <span id="chatTxt"></span>
+  </div>
+
+  <div class="head">
+    <h1><small><span id="sub">Ricettario</span> · WoW: Forever</small><span id="titolo">Ricettario di ...</span></h1>
+    <div class="stats">
+      <div class="stat"><b id="livello">-</b><span id="profLbl">Ricettario</span></div>
+      <div class="stat"><b id="statKnown">0</b><span id="statKnownLbl">ricette conosciute</span><div class="meter"><i id="meter"></i></div></div>
+    </div>
+  </div>
+
+  <div class="tools" role="search">
+    <input class="search" id="q" type="search" placeholder="Cerca una ricetta o un materiale" autocomplete="off">
+    <div class="seg" role="group" aria-label="Mostra">
+      <button type="button" data-f="known" aria-pressed="true">Le so fare</button>
+      <button type="button" data-f="unknown" aria-pressed="false">Da imparare</button>
+      <button type="button" data-f="all" aria-pressed="false">Tutte</button>
+    </div>
+    <div class="chips" id="chips" aria-label="Categorie"></div>
+  </div>
+
+  <div class="main">
+    <div class="list" id="list"></div>
+    <aside class="detail" id="detail" data-open="false" aria-live="polite"></aside>
+  </div>
+
+  <footer id="foot"></footer>
+</div>
+
+<script>
+const RELAY = "https://professioniethereum.michael-cerri90.workers.dev";
+async function caricaRicettario() {
+  const id = new URLSearchParams(location.search).get("id");
+  const errore = m => { document.querySelector(".main").innerHTML = `<p class="empty">${m}</p>`; document.querySelector(".tools").hidden = true; return {}; };
+  if (!id) return errore("Link incompleto: manca il ricettario.");
+  try {
+    const [d, mc] = await Promise.all([
+      fetch(RELAY + "/dati?id=" + encodeURIComponent(id)).then(r => r.ok ? r.json() : Promise.reject(r.status)),
+      fetch("../dati/mastercraft.json").then(r => r.json()),
+    ]);
+    const info = mc.recipes[d.prof] || {};
+    d.recipes.forEach(r => {
+      r.reag.forEach(g => { g.n = g.n || mc.items[g.id] || null; });
+      const ri = info[r.name];
+      r.skill = ri ? ri.s : null; r.src = ri ? ri.t : null; r.where = ri ? ri.w : null; r.det = ri ? ri.d : null;
+      r.su = ri && mc.skillup[ri.i] ? mc.skillup[ri.i] : null;
+    });
+    const t = (sel, v) => { const el = document.getElementById(sel); if (el) el.textContent = v; };
+    document.title = `${d.prof} di ${d.pg}`;
+    t("who", `[${d.pg}]:`); t("tradeLink", `[${d.prof}]`); t("titolo", `${d.prof} di ${d.pg}`);
+    t("sub", d.sub || "Ricettario"); t("livello", d.livello || "-"); t("profLbl", d.prof);
+    t("chatTxt", d.nome ? `scrivimi su Discord (${d.nome}) per un craft` : "dimmi cosa ti serve");
+    return { DATA: { scanned: d.scanned, recipes: d.recipes },
+      CONFIG: { discord: "https://discord.com/users/" + d.utente, nome: d.nome, pg: d.pg, prof: d.prof, relay: RELAY, pageId: id } };
+  } catch (e) {
+    return errore(e === 404 ? "Questo ricettario non esiste (o e' stato eliminato)." : "Non riesco a caricare il ricettario. Riprova tra poco.");
+  }
+}
+</script>
+<script>
+(async () => {
+const { DATA, CONFIG } = await caricaRicettario();
+if (!DATA) return;
+const CAT = {"Recovery Potions":"Pozioni di recupero","Potions":"Pozioni","Elixirs":"Elisir","Flasks":"Fiaschi","Draughts":"Draught","Weapon Oils":"Oli per armi","Lesser Transmutations":"Trasmutazioni minori","Greater Transmutations":"Trasmutazioni maggiori","Reagents":"Reagenti","Miscellaneous":"Varie","Camping":"Campeggio","SEASON OF DISCOVERY":"Season of Discovery"};
+const BASE_ORDER = ["Recovery Potions","Potions","Elixirs","Flasks","Draughts","Weapon Oils","Lesser Transmutations","Greater Transmutations","Reagents","Miscellaneous","Camping","SEASON OF DISCOVERY"];
+const SRC = {trainer:"Istruttore",vendor:"Venditore",drop:"Drop",world:"Drop nel mondo",quest:"Missione",start:"Gia' nota",object:"Oggetto nel mondo",crafted:"Creata da un'altra professione",unknown:"Fonte sconosciuta"};
+const DIFF = {optimal:"arancione",medium:"gialla",easy:"verde",trivial:"grigia"};
+const ORDER = [...BASE_ORDER, ...[...new Set(DATA.recipes.map(r => r.cat))].filter(c => !BASE_ORDER.includes(c))];
+const TINT = {"Recovery Potions":"#e0524a","Potions":"#c27be0","Elixirs":"#4fb6e8","Flasks":"#e8b84f","Draughts":"#6fd1b0","Weapon Oils":"#9a8a6a","Lesser Transmutations":"#d7d7d7","Greater Transmutations":"#ffffff","Reagents":"#a0b070","Miscellaneous":"#ff9a3c","Camping":"#8fa0b0","SEASON OF DISCOVERY":"#7fd36a"};
+
+const slug = s => "r-" + s.toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"");
+DATA.recipes.forEach(r => { r.slug = slug(r.name); r.search = (r.name + " " + r.reag.map(g => g.n || "").join(" ")).toLowerCase(); });
+const known = DATA.recipes.filter(r => r.known).length;
+
+const state = { f: "known", cat: null, q: "", sel: null, qty: 1, chi: "" };
+try { state.chi = localStorage.getItem("ricettario-chi") || ""; } catch (e) {}
+try { const s = JSON.parse(localStorage.getItem("ricettario-" + CONFIG.pg + CONFIG.prof) || "{}"); if (s.f) state.f = s.f; } catch (e) {}
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const vial = (cat, cls) => {
+  const c = TINT[cat] || "hsl(" + ([...String(cat)].reduce((a, ch) => a + ch.charCodeAt(0), 0) * 47 % 360) + " 60% 62%)";
+  if (CONFIG.prof !== "Alchemy") return `<svg class="vial ${cls||""}" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3" transform="rotate(45 12 12)" fill="${c}" fill-opacity=".25" stroke="${c}" stroke-width="1.5"/></svg>`;
+  if (/Transmut/.test(cat)) return `<svg class="vial ${cls||""}" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 21 7v10l-9 5-9-5V7z" fill="${c}" fill-opacity=".25" stroke="${c}" stroke-width="1.5"/><path d="M12 2v20M3 7l18 10M21 7 3 17" stroke="${c}" stroke-opacity=".5" stroke-width="1"/></svg>`;
+  if (cat === "Flasks") return `<svg class="vial ${cls||""}" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 2h6v6l5 10a2 2 0 0 1-2 3H6a2 2 0 0 1-2-3l5-10z" fill="none" stroke="${c}" stroke-width="1.5"/><path d="M6.5 15h11l1.5 3a1 1 0 0 1-1 1.5H6a1 1 0 0 1-1-1.5z" fill="${c}"/></svg>`;
+  return `<svg class="vial ${cls||""}" viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 2h5M10 2v5.2A7 7 0 1 0 14 7.2V2" fill="none" stroke="${c}" stroke-width="1.5"/><path d="M5.2 14a6.8 6.8 0 0 0 13.6 0z" fill="${c}"/></svg>`;
+};
+
+function visible() {
+  const q = state.q.trim().toLowerCase();
+  return DATA.recipes.filter(r =>
+    (state.f === "all" || (state.f === "known") === r.known) &&
+    (!state.cat || r.cat === state.cat) &&
+    (!q || r.search.includes(q)));
+}
+
+function renderChips() {
+  const base = DATA.recipes.filter(r => state.f === "all" || (state.f === "known") === r.known);
+  const counts = {}; base.forEach(r => counts[r.cat] = (counts[r.cat] || 0) + 1);
+  const cats = ORDER.filter(c => counts[c]);
+  if (state.cat && !counts[state.cat]) state.cat = null;
+  $("chips").innerHTML = `<button class="chip" type="button" data-c="" aria-pressed="${!state.cat}">Tutte le categorie<em>${base.length}</em></button>` +
+    cats.map(c => `<button class="chip" type="button" data-c="${esc(c)}" aria-pressed="${state.cat === c}">${CAT[c] || c}<em>${counts[c]}</em></button>`).join("");
+}
+
+function renderList() {
+  const rows = visible();
+  if (!rows.length) { $("list").innerHTML = `<p class="empty">Nessuna ricetta trovata. Prova a cercare il nome in inglese, come appare nel gioco.</p>`; return; }
+  const by = {}; rows.forEach(r => (by[r.cat] = by[r.cat] || []).push(r));
+  $("list").innerHTML = ORDER.filter(c => by[c]).map(c => {
+    const list = by[c].sort((a, b) => (b.skill || 0) - (a.skill || 0) || a.name.localeCompare(b.name));
+    return `<section class="group"><h2>${CAT[c] || c}<span>${list.length}</span></h2>` + list.map(r =>
+      `<button class="row${r.known ? "" : " unk"}" type="button" data-s="${r.slug}" aria-current="${state.sel === r.slug}">${vial(r.cat)}<span class="nm ${r.known ? "d-" + r.diff : ""}">${esc(r.name)}</span><span class="tag">${r.known ? (r.skill ?? "") : "da imparare"}</span></button>`).join("") + `</section>`;
+  }).join("");
+}
+
+function skillBar(su) {
+  if (!su || su.length < 4) return "";
+  const lo = Math.max(1, su[0] - 10), hi = Math.max(su[3] + 10, lo + 40), w = v => ((v - lo) / (hi - lo) * 100).toFixed(2) + "%";
+  const seg = [[su[0], su[1], "var(--d-optimal)"], [su[1], su[2], "var(--d-medium)"], [su[2], su[3], "var(--d-easy)"], [su[3], hi, "var(--d-trivial)"]];
+  return `<div><div class="label">Punti abilita'</div><div class="skillbar" role="img" aria-label="Arancione da ${su[0]}, gialla da ${su[1]}, verde da ${su[2]}, grigia da ${su[3]}">` +
+    seg.map(([a, b, c]) => `<i style="left:${w(a)};width:calc(${w(b)} - ${w(a)});background:${c}"></i>`).join("") +
+    `</div><div class="ticks"><span>${su[0]}</span><span>${su[1]}</span><span>${su[2]}</span><span>${su[3]}</span></div></div>`;
+}
+
+function requestText(r) {
+  const n = state.qty, made = n * (r.qty || 1);
+  const mats = r.reag.map(g => `- ${g.q * n}x ${g.n || "oggetto " + g.id}`).join("\n");
+  return [
+    `**${r.name}** x${n}${made !== n ? ` (${made} pezzi)` : ""}`,
+    mats,
+  ].join("\n");
+}
+
+function renderDetail() {
+  const d = $("detail");
+  const r = DATA.recipes.find(x => x.slug === state.sel);
+  if (!r) {
+    d.dataset.open = "false";
+    d.innerHTML = `<div class="label">Scheda ricetta</div><p class="note">Scegli una ricetta dall'elenco per vedere i materiali, dove si impara e il messaggio pronto da incollare su Discord.</p>`;
+    return;
+  }
+  d.dataset.open = "true";
+  const src = r.src ? `<strong>${SRC[r.src] || r.src}</strong>${r.skill ? ` · si impara a ${r.skill}` : ""}\n${esc(r.det || r.where || "")}` : "Nessuna informazione sulla fonte.";
+  d.innerHTML = `
+    <button class="close" type="button" id="closeD">Chiudi</button>
+    <div class="top">${vial(r.cat)}<div><h3 class="${r.known ? "d-" + r.diff : ""}">${esc(r.name)}</h3>
+      <div class="sub">${CAT[r.cat] || r.cat}${r.qty > 1 ? ` · ne crea ${r.qty}` : ""}${r.known ? ` · per ${CONFIG.pg} e' ${DIFF[r.diff] || r.diff}` : ""}</div>
+      <span class="badge ${r.known ? "ok" : "no"}">${r.known ? `${CONFIG.pg} la sa fare` : "Non ancora imparata"}</span></div></div>
+    <div><div class="label">Materiali per ${state.qty > 1 ? state.qty + " creazioni" : "una creazione"}</div>
+      <ul class="reag">${r.reag.map(g => `<li><span>${esc(g.n || "Oggetto " + g.id)}</span><b>${g.q * state.qty}</b></li>`).join("")}</ul></div>
+    ${skillBar(r.su)}
+    <div><div class="label">Dove si impara</div><div class="src">${src}</div></div>
+    ${r.known ? `<div class="req"><div class="label">Richiesta per Discord</div>
+      <div class="line"><div class="qty"><button type="button" id="minus" aria-label="Meno">-</button><input id="qtyIn" type="number" min="1" max="100" value="${state.qty}" aria-label="Quante creazioni"><button type="button" id="plus" aria-label="Piu'">+</button></div>
+      ${CONFIG.relay ? `<input class="search" id="chiIn" type="text" maxlength="40" placeholder="Il tuo nome (in gioco o su Discord)" value="${esc(state.chi)}" aria-label="Il tuo nome">
+      <button class="copy" type="button" id="sendBtn">Invia richiesta</button>` :
+      `${CONFIG.discord ? `<a class="copy" id="dcBtn" href="${esc(CONFIG.discord)}" target="_blank" rel="noopener">Richiedi su Discord</a>` : ""}
+      <button class="copy ${CONFIG.discord ? "alt" : ""}" type="button" id="copyBtn">Copia messaggio</button>`}</div>
+      <textarea id="reqText" readonly>${esc(requestText(r))}</textarea>
+      <div class="note" id="copyNote">${CONFIG.relay ? `La richiesta arriva subito a <b>${esc(CONFIG.nome || CONFIG.pg)}</b> su Discord.` : CONFIG.discord ? `Il bottone copia il messaggio e apre Discord: scrivi in privato a <b>${esc(CONFIG.nome || CONFIG.pg)}</b>, incolla con Ctrl+V e premi Invio.` : `Incollalo nel canale o in privato a ${esc(CONFIG.pg)}.`}</div></div>` :
+      `<p class="note">${esc(CONFIG.pg)} non la conosce ancora. Se ti serve, segnalaglielo: magari la ricetta ce l'hai tu.</p>`}`;
+}
+
+function render() {
+  document.querySelectorAll(".seg button").forEach(b => b.setAttribute("aria-pressed", b.dataset.f === state.f));
+  renderChips(); renderList(); renderDetail();
+}
+
+function select(s, push) {
+  state.sel = s; state.qty = 1;
+  const r = DATA.recipes.find(x => x.slug === s);
+  if (r && state.f !== "all" && (state.f === "known") !== r.known) state.f = "all";
+  if (push && s) { try { history.replaceState(null, "", "#" + s); } catch (e) { location.hash = s; } }
+  render();
+}
+
+document.addEventListener("click", e => {
+  const a = e.target.closest("a#dcBtn");
+  if (a) { const ta = $("reqText"); try { navigator.clipboard.writeText(ta.value).then(() => { $("copyNote").textContent = `Messaggio copiato: su Discord apri la chat con ${CONFIG.nome || CONFIG.pg}, premi Ctrl+V e Invio.`; }, () => {}); } catch (err) {} return; }
+  const t = e.target.closest("button"); if (!t) return;
+  if (t.dataset.f) { state.f = t.dataset.f; try { localStorage.setItem("ricettario-" + CONFIG.pg + CONFIG.prof, JSON.stringify({ f: state.f })); } catch (e) {} render(); }
+  else if (t.classList.contains("chip")) { state.cat = t.dataset.c || null; renderChips(); renderList(); }
+  else if (t.dataset.s) select(t.dataset.s, true);
+  else if (t.id === "tradeLink") { state.f = "known"; state.cat = null; state.q = ""; $("q").value = ""; render(); $("list").scrollIntoView({ behavior: "smooth", block: "start" }); }
+  else if (t.id === "closeD") { state.sel = null; renderDetail(); renderList(); }
+  else if (t.id === "plus" || t.id === "minus") { state.qty = Math.min(100, Math.max(1, state.qty + (t.id === "plus" ? 1 : -1))); renderDetail(); }
+  else if (t.id === "sendBtn") inviaRichiesta(t);
+  else if (t.id === "copyBtn") {
+    const ta = $("reqText"), note = $("copyNote");
+    const done = () => { note.textContent = "Copiato. Ora incollalo su Discord."; };
+    const fallback = () => { ta.focus(); ta.select(); note.textContent = "Testo selezionato: premi Ctrl+C per copiarlo."; };
+    try { navigator.clipboard.writeText(ta.value).then(done, fallback); } catch (err) { fallback(); }
+  }
+});
+async function inviaRichiesta(btn) {
+  const note = $("copyNote"), r = DATA.recipes.find(x => x.slug === state.sel);
+  const chi = ($("chiIn").value || "").trim().replace(/[@*_`~|<>]/g, "");
+  if (!r) return;
+  if (!chi) { note.textContent = "Scrivi il tuo nome, cosi' sa chi gli chiede il craft."; $("chiIn").focus(); return; }
+  state.chi = chi; try { localStorage.setItem("ricettario-chi", chi); } catch (e) {}
+  let ultimo = 0; try { ultimo = +localStorage.getItem("ricettario-ultimo") || 0; } catch (e) {}
+  if (Date.now() - ultimo < 30000) { note.textContent = "Hai appena inviato una richiesta: aspetta mezzo minuto prima della prossima."; return; }
+  btn.disabled = true; note.textContent = "Invio in corso...";
+  try {
+    const res = await fetch(CONFIG.relay, { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chi, testo: requestText(r), id: CONFIG.pageId || undefined }) });
+    if (!res.ok) throw new Error(res.status);
+    try { localStorage.setItem("ricettario-ultimo", String(Date.now())); } catch (e) {}
+    note.textContent = `Richiesta inviata a ${CONFIG.nome || CONFIG.pg}. Ti rispondera' su Discord.`;
+  } catch (err) {
+    note.textContent = "Invio non riuscito. Riprova tra poco oppure scrivigli direttamente su Discord.";
+  }
+  btn.disabled = false;
+}
+document.addEventListener("input", e => { if (e.target.id === "chiIn") state.chi = e.target.value; });
+document.addEventListener("change", e => { if (e.target.id === "qtyIn") { state.qty = Math.min(100, Math.max(1, parseInt(e.target.value, 10) || 1)); renderDetail(); } });
+$("q").addEventListener("input", e => { state.q = e.target.value; renderList(); });
+
+function fromHash() { const h = location.hash.slice(1); if (h && DATA.recipes.some(r => r.slug === h)) select(h, false); }
+window.addEventListener("hashchange", fromHash);
+
+$("statKnown").textContent = known + "/" + DATA.recipes.length;
+$("meter").style.width = (known / DATA.recipes.length * 100).toFixed(1) + "%";
+const when = new Date(DATA.scanned * 1000);
+$("foot").textContent = `Dati letti dal gioco il ${when.toLocaleDateString("it-IT")} alle ${when.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" })}, dall'addon Mastercraft. Nomi delle ricette e dei materiali come nel client inglese.`;
+render();
+fromHash();
+if (!state.sel) { const first = DATA.recipes.filter(r => r.known).sort((a, b) => (b.skill || 0) - (a.skill || 0))[0]; if (first && window.matchMedia("(min-width: 821px)").matches) { state.sel = first.slug; render(); } }
+})();
+</script>
+
+</html>

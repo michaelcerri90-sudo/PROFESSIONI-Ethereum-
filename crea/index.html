@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Crea il tuo ricettario</title>
+<meta name="description" content="Carica Mastercraft.lua e pubblica il ricettario delle tue professioni sul sito della gilda Ethereum.">
+<meta name="robots" content="noindex">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alegreya+SC:wght@500;700&family=Alegreya+Sans:wght@400;500;700&display=swap">
+<style>
+/* Layout: una colonna sola, tre passi in fila (file, scelta, pubblica) come una procedura guidata. */
+:root{
+  color-scheme:dark;
+  --bg:#0d1117; --panel:#151b24; --panel-2:#1c2430; --line:#2a3442; --ink:#e9e3d2; --muted:#9aa3ae;
+  --gold:#ffd000; --gold-soft:rgba(255,208,0,.12); --ok:#40c040; --bad:#ff6b5a;
+  --font-display:"Alegreya SC","Palatino Linotype",Georgia,serif;
+  --font-body:"Alegreya Sans","Segoe UI",system-ui,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{background:var(--bg)}
+body{margin:0;color:var(--ink);font-family:var(--font-body);font-size:16px;line-height:1.5;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:28px 48px}
+.wrap{max-width:720px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
+h1{font-family:var(--font-display);font-size:clamp(28px,5vw,42px);margin:0;line-height:1.1;text-wrap:balance}
+h1 small{display:block;font-family:var(--font-body);font-size:14px;font-weight:500;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;margin-bottom:6px}
+h2{font-family:var(--font-display);font-size:20px;margin:0}
+p{margin:0}
+.step{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:18px;display:flex;flex-direction:column;gap:12px}
+.step[aria-disabled="true"]{opacity:.45;pointer-events:none}
+.num{color:var(--gold);font-variant-numeric:tabular-nums;margin-right:8px}
+.muted{color:var(--muted);font-size:14px}
+code{background:var(--bg);border:1px solid var(--line);border-radius:3px;padding:1px 5px;font-size:13px;overflow-wrap:anywhere}
+.drop{border:2px dashed var(--line);border-radius:6px;padding:22px;text-align:center;cursor:pointer;display:flex;flex-direction:column;gap:6px;align-items:center}
+.drop:hover,.drop.over{border-color:var(--gold);background:var(--gold-soft)}
+.drop input{display:none}
+.btn{background:var(--gold);color:#1a1400;border:0;border-radius:4px;padding:10px 16px;font:inherit;font-weight:700;cursor:pointer;align-self:flex-start}
+.btn:disabled{opacity:.5;cursor:default}
+.btn.alt{background:transparent;color:var(--gold);border:1px solid var(--gold)}
+label{display:flex;flex-direction:column;gap:4px;font-size:14px;color:var(--muted)}
+input[type=text],select{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:4px;padding:8px 10px;width:100%}
+.scelte{display:grid;gap:6px}
+.scelta{display:flex;gap:10px;align-items:center;padding:8px 10px;border:1px solid var(--line);border-radius:4px;cursor:pointer}
+.scelta:has(input:checked){border-color:var(--gold);background:var(--gold-soft)}
+.scelta span{flex:1;min-width:0}
+.scelta em{font-style:normal;color:var(--muted);font-size:14px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.esito{padding:10px 12px;border-radius:4px;border:1px solid var(--line);background:var(--bg);overflow-wrap:anywhere}
+.esito.ok{border-color:var(--ok)} .esito.bad{border-color:var(--bad);color:var(--bad)}
+.esito a{color:var(--gold)}
+:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+</style>
+
+<div class="wrap">
+  <h1><small>Gilda Ethereum · WoW: Forever</small>Crea il tuo ricettario</h1>
+  <p id="saluto" class="muted"></p>
+
+  <section class="step" id="s1">
+    <h2><span class="num">1</span>Carica Mastercraft.lua</h2>
+    <p class="muted">Prima, in gioco: apri la finestra di ogni professione da mostrare e scrivi <code>/reload</code>. Il file e' in<br>
+      <code>World of Warcraft\_forever_\WTF\Account\NOME_ACCOUNT\SavedVariables\Mastercraft.lua</code></p>
+    <label class="drop" id="drop" for="file">
+      <input type="file" id="file" accept=".lua">
+      <b>Scegli il file o trascinalo qui</b>
+      <span class="muted">Viene letto solo nel tuo browser: al sito arrivano soltanto le ricette che scegli.</span>
+    </label>
+    <div id="esito1" class="esito" hidden></div>
+  </section>
+
+  <section class="step" id="s2" aria-disabled="true">
+    <h2><span class="num">2</span>Scegli personaggio e professione</h2>
+    <div class="scelte" id="scelte"></div>
+    <label>Descrizione del personaggio (facoltativa)
+      <input type="text" id="sub" maxlength="40" placeholder="es. Orco guerriero">
+    </label>
+  </section>
+
+  <section class="step" id="s3" aria-disabled="true">
+    <h2><span class="num">3</span>Pubblica</h2>
+    <p class="muted">Le richieste di craft dalla tua pagina ti arriveranno in privato dal bot Ricettario.</p>
+    <button class="btn" type="button" id="pubblica">Pubblica il ricettario</button>
+    <div id="esito3" class="esito" hidden></div>
+  </section>
+</div>
+
+<script>
+const RELAY = "https://professioniethereum.michael-cerri90.workers.dev";
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const RACCOLTA = ["Herbalism", "Skinning", "Fishing", "Mining"];
+
+// --- link personale dal bot ---
+const token = (location.hash.match(/t=([^&]+)/) || [])[1] || "";
+let nomeDiscord = "";
+try { nomeDiscord = decodeURIComponent(escape(atob(token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")))); } catch (e) {}
+if (!token) {
+  $("saluto").innerHTML = "Per pubblicare serve il tuo link personale: su Discord, nel server della gilda, scrivi <code>/ricettario crea</code> e apri il link che ti manda il bot.";
+} else {
+  $("saluto").textContent = `Ciao ${nomeDiscord || "!"}: questo link vale 24 ore ed e' solo tuo.`;
+}
+
+// --- lettore delle SavedVariables (sintassi Lua che scrive WoW) ---
+function leggiLua(src) {
+  let i = 0;
+  const n = src.length;
+  const errore = m => { throw new Error(`${m} (posizione ${i})`); };
+  function spazi() {
+    for (;;) {
+      while (i < n && /\s/.test(src[i])) i++;
+      if (src.startsWith("--", i)) {
+        if (src.startsWith("--[[", i)) { const e = src.indexOf("]]", i); i = e < 0 ? n : e + 2; }
+        else { const e = src.indexOf("\n", i); i = e < 0 ? n : e + 1; }
+      } else return;
+    }
+  }
+  function stringa() {
+    const q = src[i++]; let out = "";
+    while (i < n && src[i] !== q) {
+      let c = src[i++];
+      if (c === "\\") {
+        c = src[i++];
+        if (c === "n") out += "\n"; else if (c === "t") out += "\t"; else if (c === "r") out += "\r";
+        else if (/\d/.test(c)) { let d = c; while (d.length < 3 && /\d/.test(src[i])) d += src[i++]; out += String.fromCharCode(+d); }
+        else if (c === "\n") out += "\n"; else out += c;
+      } else out += c;
+    }
+    i++;
+    return out;
+  }
+  function valore() {
+    spazi();
+    const c = src[i];
+    if (c === "{") return tabella();
+    if (c === '"' || c === "'") return stringa();
+    const m = /^(?:true|false|nil|-?(?:0x[0-9a-fA-F]+|\d+\.?\d*(?:[eE][+-]?\d+)?|\.\d+)|-?inf|nan)/.exec(src.slice(i, i + 40));
+    if (!m) errore("valore non riconosciuto");
+    i += m[0].length;
+    if (m[0] === "true") return true; if (m[0] === "false") return false; if (m[0] === "nil") return null;
+    return Number(m[0]);
+  }
+  function tabella() {
+    i++; const t = {}; let pos = 1;
+    for (;;) {
+      spazi();
+      if (src[i] === "}") { i++; return t; }
+      if (src[i] === "[" && src[i + 1] !== "[") {
+        i++; const k = valore(); spazi(); if (src[i] !== "]") errore("manca ]"); i++; spazi();
+        if (src[i] !== "=") errore("manca ="); i++;
+        t[k] = valore();
+      } else {
+        const m = /^[A-Za-z_]\w*\s*=(?!=)/.exec(src.slice(i, i + 80));
+        if (m) { const k = m[0].replace(/\s*=$/, ""); i += m[0].length; t[k] = valore(); }
+        else t[pos++] = valore();
+      }
+      spazi();
+      if (src[i] === "," || src[i] === ";") i++;
+    }
+  }
+  const globali = {};
+  for (;;) {
+    spazi();
+    if (i >= n) return globali;
+    const m = /^[A-Za-z_]\w*/.exec(src.slice(i, i + 80));
+    if (!m) errore("atteso un nome");
+    i += m[0].length; spazi();
+    if (src[i] !== "=") errore("manca =");
+    i++;
+    globali[m[0]] = valore();
+  }
+}
+const valori = t => Object.keys(t || {}).sort((a, b) => a - b).map(k => t[k]);
+
+// --- dal file alle scelte ---
+let opzioni = [];
+function analizza(testo) {
+  const g = leggiLua(testo);
+  const db = g.MastercraftDB;
+  if (!db || !db.recipes) throw new Error("questo non sembra il file di Mastercraft (manca MastercraftDB)");
+  const out = [];
+  for (const [guid, profs] of Object.entries(db.recipes)) {
+    const ch = (db.chars || {})[guid] || {};
+    for (const [prof, v] of Object.entries(profs || {})) {
+      const lista = valori(v && v.list);
+      const noti = lista.filter(r => r && r.learned !== false).length;
+      if (!lista.length || RACCOLTA.includes(prof)) continue;
+      const p = valori(ch.professions).find(x => x && x.name === prof);
+      out.push({ guid, pg: ch.name || guid, realm: ch.realm || "", prof, lista, noti, totale: lista.length,
+        livello: p ? `${p.skill}/${p.max}` : "", scanned: v.scanned || 0 });
+    }
+  }
+  return out.sort((a, b) => b.noti - a.noti);
+}
+
+function mostraScelte() {
+  $("scelte").innerHTML = opzioni.map((o, k) => `<label class="scelta"><input type="radio" name="scelta" value="${k}" ${k === 0 ? "checked" : ""}>
+    <span><b>${esc(o.pg)}</b> · ${esc(o.prof)}${o.livello ? " " + esc(o.livello) : ""}${o.realm ? `<br><span class="muted">${esc(o.realm)}</span>` : ""}</span>
+    <em>${o.noti}/${o.totale} ricette</em></label>`).join("");
+  $("s2").setAttribute("aria-disabled", "false");
+  $("s3").setAttribute("aria-disabled", token ? "false" : "true");
+}
+
+async function caricaFile(f) {
+  const e = $("esito1"); e.hidden = false; e.className = "esito"; e.textContent = "Lettura del file...";
+  try {
+    opzioni = analizza(await f.text());
+    if (!opzioni.length) throw new Error("nel file non ci sono professioni salvate: in gioco apri la finestra della professione e fai /reload");
+    e.className = "esito ok";
+    e.textContent = `Trovate ${opzioni.length} professioni in ${f.name}.`;
+    mostraScelte();
+  } catch (err) {
+    e.className = "esito bad"; e.textContent = "Non riesco a leggere il file: " + err.message;
+  }
+}
+
+$("file").addEventListener("change", ev => { if (ev.target.files[0]) caricaFile(ev.target.files[0]); });
+const drop = $("drop");
+drop.addEventListener("dragover", ev => { ev.preventDefault(); drop.classList.add("over"); });
+drop.addEventListener("dragleave", () => drop.classList.remove("over"));
+drop.addEventListener("drop", ev => { ev.preventDefault(); drop.classList.remove("over"); if (ev.dataTransfer.files[0]) caricaFile(ev.dataTransfer.files[0]); });
+
+$("pubblica").addEventListener("click", async () => {
+  const e = $("esito3"), btn = $("pubblica");
+  const k = +(document.querySelector('input[name="scelta"]:checked') || {}).value;
+  const o = opzioni[k];
+  if (!o) return;
+  const recipes = o.lista.filter(Boolean).map(r => ({
+    name: r.name, cat: r.category || r.group || "Ricette", known: r.learned !== false, diff: r.diff || "", qty: r.outputQty || 1,
+    reag: valori(r.reagents).filter(Boolean).map(g => ({ id: g.itemID, q: g.qty || 1 })),
+  }));
+  btn.disabled = true; e.hidden = false; e.className = "esito"; e.textContent = "Pubblicazione...";
+  try {
+    const res = await fetch(RELAY + "/pubblica", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token, pg: o.pg, prof: o.prof, sub: $("sub").value, livello: o.livello, scanned: o.scanned, recipes }) });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(d.errore || res.status);
+    const discord = `[${o.prof} ${o.pg}](${d.link})`;
+    e.className = "esito ok";
+    e.innerHTML = `Fatto! La tua pagina: <a href="${esc(d.link)}" target="_blank" rel="noopener">${esc(d.link)}</a><br><br>
+      Da incollare su Discord: <code id="dc">${esc(discord)}</code> <button class="btn alt" type="button" id="copia">Copia</button>`;
+    $("copia").onclick = () => navigator.clipboard.writeText(discord).then(() => { $("copia").textContent = "Copiato"; }, () => {});
+  } catch (err) {
+    e.className = "esito bad"; e.textContent = "Pubblicazione non riuscita: " + err.message;
+  }
+  btn.disabled = false;
+});
+</script>
+
+</html>
