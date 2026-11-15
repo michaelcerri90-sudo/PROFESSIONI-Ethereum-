@@ -336,7 +336,7 @@ async function inviaRichiesta(btn) {
   if (Date.now() - ultimo < 30000) { note.textContent = "Hai appena inviato una richiesta: aspetta mezzo minuto prima della prossima."; return; }
   btn.disabled = true; note.textContent = "Invio in corso...";
   try {
-    const res = await fetch(CONFIG.relay, { method: "POST", headers: { "Content-Type": "application/json" },
+    const res = await fetch(CONFIG.relay + "/richiesta", { method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ chi, testo: requestText(r), id: CONFIG.pageId || undefined }) });
     if (!res.ok) throw new Error(res.status);
     try { localStorage.setItem("ricettario-ultimo", String(Date.now())); } catch (e) {}
