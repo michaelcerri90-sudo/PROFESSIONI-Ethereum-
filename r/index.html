@@ -342,7 +342,9 @@ async function inviaRichiesta(btn) {
     try { localStorage.setItem("ricettario-ultimo", String(Date.now())); } catch (e) {}
     note.textContent = `Richiesta inviata a ${CONFIG.nome || CONFIG.pg}. Ti rispondera' su Discord.`;
   } catch (err) {
-    note.textContent = "Invio non riuscito. Riprova tra poco oppure scrivigli direttamente su Discord.";
+    note.textContent = String(err.message) === "429"
+      ? "Hai appena inviato una richiesta: aspetta 20 secondi e riprova."
+      : `Invio non riuscito (${err.message}). Riprova tra poco oppure scrivigli direttamente su Discord.`;
   }
   btn.disabled = false;
 }
