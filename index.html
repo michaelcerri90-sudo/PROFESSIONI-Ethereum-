@@ -228,9 +228,7 @@ function requestText(r) {
   const n = state.qty, made = n * (r.qty || 1);
   const mats = r.reag.map(g => `- ${g.q * n}x ${g.n || "oggetto " + g.id}`).join("\n");
   return [
-    `Ciao${CONFIG.nome ? " " + CONFIG.nome : ""}! Richiesta craft ${CONFIG.prof} (${CONFIG.pg})`,
     `**${r.name}** x${n}${made !== n ? ` (${made} pezzi)` : ""}`,
-    `Materiali che porto:`,
     mats,
   ].join("\n");
 }
