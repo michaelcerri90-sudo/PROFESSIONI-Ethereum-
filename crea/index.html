@@ -76,6 +76,9 @@ input[type=text],select{font:inherit;color:var(--ink);background:var(--bg);borde
   <section class="step" id="s3" aria-disabled="true">
     <h2><span class="num">3</span>Pubblica</h2>
     <p class="muted">Le richieste di craft dalla tua pagina ti arriveranno in privato dal bot Ricettario.</p>
+    <label id="boxLink" hidden>Manca il tuo link personale. Su Discord scrivi <code>/ricettario crea</code>, copia il link che ti manda il bot e incollalo qui:
+      <input type="text" id="linkBot" placeholder="https://.../crea/#t=..." autocomplete="off">
+    </label>
     <button class="btn" type="button" id="pubblica">Pubblica il ricettario</button>
     <div id="esito3" class="esito" hidden></div>
   </section>
@@ -88,14 +91,22 @@ const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;
 const RACCOLTA = ["Herbalism", "Skinning", "Fishing", "Mining"];
 
 // --- link personale dal bot ---
-const token = (location.hash.match(/t=([^&]+)/) || [])[1] || "";
+const prendiToken = s => (String(s || "").match(/[#?&]t=([\w.-]+)/) || [])[1] || "";
+let token = prendiToken(location.hash) || prendiToken(location.search);
 let nomeDiscord = "";
-try { nomeDiscord = decodeURIComponent(escape(atob(token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")))); } catch (e) {}
-if (!token) {
-  $("saluto").innerHTML = "Per pubblicare serve il tuo link personale: su Discord, nel server della gilda, scrivi <code>/ricettario crea</code> e apri il link che ti manda il bot.";
-} else {
-  $("saluto").textContent = `Ciao ${nomeDiscord || "!"}: questo link vale 24 ore ed e' solo tuo.`;
+function saluta() {
+  nomeDiscord = "";
+  try { nomeDiscord = decodeURIComponent(escape(atob(token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")))); } catch (e) {}
+  if (!token) {
+    $("saluto").innerHTML = "Per pubblicare serve il tuo link personale: su Discord, nel server della gilda, scrivi <code>/ricettario crea</code> e apri il link che ti manda il bot.";
+  } else {
+    $("saluto").textContent = `Ciao ${nomeDiscord || ""}! Questo link vale 24 ore ed e' solo tuo.`;
+  }
+  $("boxLink").hidden = !!token;
+  $("pubblica").disabled = !token;
 }
+saluta();
+$("linkBot").addEventListener("input", ev => { const t = prendiToken(ev.target.value); if (t) { token = t; saluta(); } });
 
 // --- lettore delle SavedVariables (sintassi Lua che scrive WoW) ---
 function leggiLua(src) {
@@ -194,7 +205,7 @@ function mostraScelte() {
     <span><b>${esc(o.pg)}</b> · ${esc(o.prof)}${o.livello ? " " + esc(o.livello) : ""}${o.realm ? `<br><span class="muted">${esc(o.realm)}</span>` : ""}</span>
     <em>${o.noti}/${o.totale} ricette</em></label>`).join("");
   $("s2").setAttribute("aria-disabled", "false");
-  $("s3").setAttribute("aria-disabled", token ? "false" : "true");
+  $("s3").setAttribute("aria-disabled", "false");
 }
 
 async function caricaFile(f) {
@@ -239,7 +250,7 @@ $("pubblica").addEventListener("click", async () => {
   } catch (err) {
     e.className = "esito bad"; e.textContent = "Pubblicazione non riuscita: " + err.message;
   }
-  btn.disabled = false;
+  btn.disabled = !token;
 });
 </script>
 
