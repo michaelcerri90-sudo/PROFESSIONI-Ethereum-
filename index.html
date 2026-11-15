@@ -226,8 +226,13 @@ function skillBar(su) {
 
 function requestText(r) {
   const n = state.qty, made = n * (r.qty || 1);
-  const mats = r.reag.map(g => `${g.q * n}x ${g.n || "oggetto " + g.id}`).join(", ");
-  return `Ciao${CONFIG.nome ? " " + CONFIG.nome : ""}! Mi faresti craftare a ${CONFIG.pg} ${n === 1 ? "" : n + "x "}${r.name}${made !== n ? ` (${made} pezzi)` : ""}? Ti porto i materiali: ${mats}.`;
+  const mats = r.reag.map(g => `- ${g.q * n}x ${g.n || "oggetto " + g.id}`).join("\n");
+  return [
+    `Ciao${CONFIG.nome ? " " + CONFIG.nome : ""}! Richiesta craft ${CONFIG.prof} (${CONFIG.pg})`,
+    `**${r.name}** x${n}${made !== n ? ` (${made} pezzi)` : ""}`,
+    `Materiali che porto:`,
+    mats,
+  ].join("\n");
 }
 
 function renderDetail() {
