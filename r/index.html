@@ -85,6 +85,12 @@ button,input{font:inherit;color:inherit}
 .row.unk .nm{color:var(--unknown)}
 .vial{flex:none;width:18px;height:18px}
 .d-optimal{color:var(--d-optimal)} .d-medium{color:var(--d-medium)} .d-easy{color:var(--d-easy)} .d-trivial{color:var(--d-trivial)}
+.tt{background:#070b14;border:1px solid #3d4a5c;border-radius:5px;padding:12px 14px;display:flex;flex-direction:column;gap:3px}
+.tt .tn{font-weight:700;font-size:17px;margin-bottom:2px}
+.tt .w{color:#ffffff} .tt .g{color:#1eff00} .tt .y{color:#ffd100}
+.tt .vuoto{color:var(--muted);font-size:14px}
+.q0{color:#9d9d9d} .q1{color:var(--ink)} .q2{color:#1eff00} .q3{color:#4a9eff} .q4{color:#b86cff} .q5{color:#ff8000}
+.tt .tn.q1{color:#ffffff}
 .empty{padding:24px 14px;color:var(--muted)}
 
 .detail{position:sticky;top:max(16px, env(safe-area-inset-top, 0px));background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:20px;display:flex;flex-direction:column;gap:16px;min-width:0}
@@ -175,8 +181,7 @@ async function caricaRicettario() {
     d.recipes.forEach(r => {
       r.reag.forEach(g => { g.n = g.n || mc.items[g.id] || null; });
       const ri = info[r.name];
-      r.skill = ri ? ri.s : null; r.src = ri ? ri.t : null; r.where = ri ? ri.w : null; r.det = ri ? ri.d : null;
-      r.su = ri && mc.skillup[ri.i] ? mc.skillup[ri.i] : null;
+      r.skill = ri ? ri.s : null; r.fx = ri ? ri.fx : []; r.q = ri ? ri.q : 1;
     });
     const t = (sel, v) => { const el = document.getElementById(sel); if (el) el.textContent = v; };
     document.title = `${d.prof} di ${d.pg}`;
@@ -243,11 +248,14 @@ function renderList() {
   $("list").innerHTML = ORDER.filter(c => by[c]).map(c => {
     const list = by[c].sort((a, b) => (b.skill || 0) - (a.skill || 0) || a.name.localeCompare(b.name));
     return `<section class="group"><h2>${CAT[c] || c}<span>${list.length}</span></h2>` + list.map(r =>
-      `<button class="row${r.known ? "" : " unk"}" type="button" data-s="${r.slug}" aria-current="${state.sel === r.slug}">${vial(r.cat)}<span class="nm ${r.known ? "d-" + r.diff : ""}">${esc(r.name)}</span><span class="tag">${r.known ? (r.skill ?? "") : "da imparare"}</span></button>`).join("") + `</section>`;
+      `<button class="row${r.known ? "" : " unk"}" type="button" data-s="${r.slug}" aria-current="${state.sel === r.slug}">${vial(r.cat)}<span class="nm q${r.q != null && r.q >= 0 ? r.q : 1}">${esc(r.name)}</span><span class="tag">${r.known ? "" : "da imparare"}</span></button>`).join("") + `</section>`;
   }).join("");
 }
 
 function skillBar(su) {
+  return ""; // punti abilita' tolti su richiesta
+}
+function skillBarVecchia(su) {
   if (!su || su.length < 4) return "";
   const lo = Math.max(1, su[0] - 10), hi = Math.max(su[3] + 10, lo + 40), w = v => ((v - lo) / (hi - lo) * 100).toFixed(2) + "%";
   const seg = [[su[0], su[1], "var(--d-optimal)"], [su[1], su[2], "var(--d-medium)"], [su[2], su[3], "var(--d-easy)"], [su[3], hi, "var(--d-trivial)"]];
@@ -274,16 +282,16 @@ function renderDetail() {
     return;
   }
   d.dataset.open = "true";
-  const src = r.src ? `<strong>${SRC[r.src] || r.src}</strong>${r.skill ? ` · si impara a ${r.skill}` : ""}\n${esc(r.det || r.where || "")}` : "Nessuna informazione sulla fonte.";
+  const fx = r.fx || [], q = r.q != null && r.q >= 0 ? r.q : 1;
+  const tt = `<div class="tt"><span class="tn q${q}">${esc(r.name)}</span>${fx.length ? fx.map(f => `<span class="${f[0]}">${esc(f[1])}</span>`).join("") : `<span class="vuoto">Nessun effetto da mostrare.</span>`}</div>`;
   d.innerHTML = `
     <button class="close" type="button" id="closeD">Chiudi</button>
-    <div class="top">${vial(r.cat)}<div><h3 class="${r.known ? "d-" + r.diff : ""}">${esc(r.name)}</h3>
-      <div class="sub">${CAT[r.cat] || r.cat}${r.qty > 1 ? ` · ne crea ${r.qty}` : ""}${r.known ? ` · per ${CONFIG.pg} e' ${DIFF[r.diff] || r.diff}` : ""}</div>
+    <div class="top">${vial(r.cat)}<div><h3 class="q${q}">${esc(r.name)}</h3>
+      <div class="sub">${CAT[r.cat] || r.cat}${r.qty > 1 ? ` · ne crea ${r.qty}` : ""}</div>
       <span class="badge ${r.known ? "ok" : "no"}">${r.known ? `${CONFIG.pg} la sa fare` : "Non ancora imparata"}</span></div></div>
+    ${tt}
     <div><div class="label">Materiali per ${state.qty > 1 ? state.qty + " creazioni" : "una creazione"}</div>
       <ul class="reag">${r.reag.map(g => `<li><span>${esc(g.n || "Oggetto " + g.id)}</span><b>${g.q * state.qty}</b></li>`).join("")}</ul></div>
-    ${skillBar(r.su)}
-    <div><div class="label">Dove si impara</div><div class="src">${src}</div></div>
     ${r.known ? `<div class="req"><div class="label">Richiesta per Discord</div>
       <div class="line"><div class="qty"><button type="button" id="minus" aria-label="Meno">-</button><input id="qtyIn" type="number" min="1" max="100" value="${state.qty}" aria-label="Quante creazioni"><button type="button" id="plus" aria-label="Piu'">+</button></div>
       ${CONFIG.relay ? `<input class="search" id="chiIn" type="text" maxlength="40" placeholder="Il tuo nome in gioco (obbligatorio)" required value="${esc(state.chi)}" aria-label="Il tuo nome in gioco">

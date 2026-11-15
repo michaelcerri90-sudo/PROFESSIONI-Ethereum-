@@ -242,9 +242,9 @@ $("pubblica").addEventListener("click", async () => {
       body: JSON.stringify({ token, pg: o.pg, prof: o.prof, sub: $("sub").value, livello: o.livello, scanned: o.scanned, recipes }) });
     const d = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(d.errore || res.status);
-    const discord = `[${o.prof} ${o.pg}](${d.link})`;
+    const discord = `[${o.prof} Ethereum](${d.link})`;
     e.className = "esito ok";
-    e.innerHTML = `Fatto! La tua pagina: <a href="${esc(d.link)}" target="_blank" rel="noopener">${esc(d.link)}</a><br><br>
+    e.innerHTML = `Fatto! Ora compari nella pagina di ${esc(o.prof)} della gilda: <a href="${esc(d.link)}" target="_blank" rel="noopener">${esc(d.link)}</a><br><br>
       Da incollare su Discord: <code id="dc">${esc(discord)}</code> <button class="btn alt" type="button" id="copia">Copia</button>`;
     $("copia").onclick = () => navigator.clipboard.writeText(discord).then(() => { $("copia").textContent = "Copiato"; }, () => {});
   } catch (err) {
