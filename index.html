@@ -255,7 +255,7 @@ function renderDetail() {
     <div><div class="label">Dove si impara</div><div class="src">${src}</div></div>
     ${r.known ? `<div class="req"><div class="label">Richiesta per Discord</div>
       <div class="line"><div class="qty"><button type="button" id="minus" aria-label="Meno">-</button><input id="qtyIn" type="number" min="1" max="100" value="${state.qty}" aria-label="Quante creazioni"><button type="button" id="plus" aria-label="Piu'">+</button></div>
-      ${CONFIG.relay ? `<input class="search" id="chiIn" type="text" maxlength="40" placeholder="Il tuo nome (in gioco o su Discord)" value="${esc(state.chi)}" aria-label="Il tuo nome">
+      ${CONFIG.relay ? `<input class="search" id="chiIn" type="text" maxlength="40" placeholder="Il tuo nome in gioco (obbligatorio)" required value="${esc(state.chi)}" aria-label="Il tuo nome in gioco">
       <button class="copy" type="button" id="sendBtn">Invia richiesta</button>` :
       `${CONFIG.discord ? `<a class="copy" id="dcBtn" href="${esc(CONFIG.discord)}" target="_blank" rel="noopener">Richiedi su Discord</a>` : ""}
       <button class="copy ${CONFIG.discord ? "alt" : ""}" type="button" id="copyBtn">Copia messaggio</button>`}</div>
@@ -299,7 +299,7 @@ async function inviaRichiesta(btn) {
   const note = $("copyNote"), r = DATA.recipes.find(x => x.slug === state.sel);
   const chi = ($("chiIn").value || "").trim().replace(/[@*_`~|<>]/g, "");
   if (!r) return;
-  if (!chi) { note.textContent = "Scrivi il tuo nome, cosi' sa chi gli chiede il craft."; $("chiIn").focus(); return; }
+  if (!chi) { note.textContent = "Scrivi il tuo nome in gioco: senza, la richiesta non parte."; $("chiIn").focus(); return; }
   state.chi = chi; try { localStorage.setItem("ricettario-chi", chi); } catch (e) {}
   let ultimo = 0; try { ultimo = +localStorage.getItem("ricettario-ultimo") || 0; } catch (e) {}
   if (Date.now() - ultimo < 30000) { note.textContent = "Hai appena inviato una richiesta: aspetta mezzo minuto prima della prossima."; return; }
