@@ -68,6 +68,9 @@ input[type=text],select{font:inherit;color:var(--ink);background:var(--bg);borde
   <section class="step" id="s2" aria-disabled="true">
     <h2><span class="num">2</span>Scegli personaggio e professione</h2>
     <div class="scelte" id="scelte"></div>
+    <label>Nome del personaggio in gioco (obbligatorio)
+      <input type="text" id="pgIn" maxlength="24" required placeholder="es. Cornelius" autocomplete="off">
+    </label>
     <label>Descrizione del personaggio (facoltativa)
       <input type="text" id="sub" maxlength="40" placeholder="es. Orco guerriero">
     </label>
@@ -206,7 +209,12 @@ function mostraScelte() {
     <em>${o.noti}/${o.totale} ricette</em></label>`).join("");
   $("s2").setAttribute("aria-disabled", "false");
   $("s3").setAttribute("aria-disabled", "false");
+  $("pgIn").value = opzioni[0] ? opzioni[0].pg : "";
 }
+// il nome si propone dal file quando cambi scelta, ma si puo' correggere
+document.addEventListener("change", ev => {
+  if (ev.target.name === "scelta") { const o = opzioni[+ev.target.value]; if (o) $("pgIn").value = o.pg; }
+});
 
 async function caricaFile(f) {
   const e = $("esito1"); e.hidden = false; e.className = "esito"; e.textContent = "Lettura del file...";
@@ -232,6 +240,12 @@ $("pubblica").addEventListener("click", async () => {
   const k = +(document.querySelector('input[name="scelta"]:checked') || {}).value;
   const o = opzioni[k];
   if (!o) return;
+  const pg = ($("pgIn").value || "").trim().replace(/[<>@`*_~|]/g, "");
+  if (!pg) {
+    e.hidden = false; e.className = "esito bad"; e.textContent = "Scrivi il nome del tuo personaggio in gioco: e' quello che vedono gli altri quando chiedono un craft.";
+    $("pgIn").focus();
+    return;
+  }
   const recipes = o.lista.filter(Boolean).map(r => ({
     name: r.name, cat: r.category || r.group || "Ricette", known: r.learned !== false, diff: r.diff || "", qty: r.outputQty || 1,
     reag: valori(r.reagents).filter(Boolean).map(g => ({ id: g.itemID, q: g.qty || 1 })),
@@ -239,7 +253,7 @@ $("pubblica").addEventListener("click", async () => {
   btn.disabled = true; e.hidden = false; e.className = "esito"; e.textContent = "Pubblicazione...";
   try {
     const res = await fetch(RELAY + "/pubblica", { method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ token, pg: o.pg, prof: o.prof, sub: $("sub").value, livello: o.livello, scanned: o.scanned, recipes }) });
+      body: JSON.stringify({ token, pg, prof: o.prof, sub: $("sub").value, livello: o.livello, scanned: o.scanned, recipes }) });
     const d = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(d.errore || res.status);
     const discord = `[${o.prof} Ethereum](${d.link})`;
