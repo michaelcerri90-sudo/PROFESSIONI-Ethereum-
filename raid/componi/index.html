@@ -39,12 +39,20 @@ p{margin:0}
 @media (max-width:900px){.pool{position:static;max-height:none}}
 .chip{display:flex;align-items:center;gap:6px;padding:4px 6px;border-radius:4px;background:var(--bg);border:1px solid var(--line);border-left:4px solid var(--c);cursor:pointer;min-width:0;margin-bottom:4px;user-select:none}
 .chip.sel{outline:2px solid var(--gold)}
-.chip.messo{opacity:.4}
+.chip.messo{opacity:.4;filter:grayscale(1)}
+.chip.pool{flex-direction:column;align-items:stretch;gap:3px}
+.chip .r1{display:flex;align-items:center;gap:5px;min-width:0}
+.chip .r2{display:flex;flex-wrap:wrap;gap:2px;padding-left:1px}
+.chip .r2 .ic{width:15px;height:15px}
+.chip .tag{display:flex;gap:4px;margin-left:auto;flex:none}
+.chip .ic.attiva{outline:1px solid var(--gold);outline-offset:1px}
+.chip .posto{color:var(--muted)}
 .chip.fuori{border-style:dashed;border-left-style:solid;background:repeating-linear-gradient(135deg,var(--bg) 0 6px,#1a1210 6px 12px)}
 .raid header .ref{flex-direction:row;align-items:center;gap:6px;font-size:13px}
 .raid header .ref input{width:190px;padding:4px 6px;font-size:13px}
 .perraid{font:inherit;font-size:13px;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:4px;padding:4px 6px}
-.chip .n{font-weight:700;color:var(--c);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chip .n{font-weight:700;color:var(--c);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.slot .chip .n{flex:1}
 .chip .s{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0}
 .chip .st{font-size:11px;color:var(--gold);white-space:nowrap}
 .chip .sw{background:none;border:1px solid var(--line);color:var(--muted);border-radius:3px;font-size:11px;padding:0 4px;cursor:pointer}
@@ -96,7 +104,7 @@ textarea{min-height:120px;resize:vertical}
     <button class="btn" type="button" id="pubblica">Pubblica gruppi</button>
   </div>
   <div id="esito" class="esito" hidden></div>
-  <p class="muted">Clicca un giocatore e poi un posto vuoto (oppure trascinalo). Clicca un giocatore gia' messo per spostarlo; la x lo rimette tra gli iscritti. Il tasto ⇄ passa all'altra spec (la piccola icona accanto al nome = si e' segnato anche con quella). Chi fa piu' raid nello stesso giorno puo' stare in piu' tabelle; a strisce = non si e' segnato a quel raid.</p>
+  <p class="muted">Clicca un giocatore e poi un posto vuoto (oppure trascinalo). Clicca un giocatore gia' messo per spostarlo; la x lo rimette tra gli iscritti. Accanto al nome: spec principale e seconda spec (quella in uso ha il bordo), sotto i buff che porta; chi e' gia' in un raid diventa grigio. Il tasto ⇄ passa all'altra spec. Chi fa piu' raid nello stesso giorno puo' stare in piu' tabelle; a strisce = non si e' segnato a quel raid.</p>
   <div class="main">
     <aside class="pool" id="pool"></aside>
     <section class="board" id="board"></section>
@@ -175,20 +183,28 @@ function metti(u, da, r, g, s) {
 function inPanchina(u, da) { if (da) togliDa(u, da); if (!comp.panchina.includes(u)) comp.panchina.push(u); modificato(); }
 function modificato() { sporco = true; sel = null; disegna(); }
 
+// Iscritti (opzioni.pool): riga 1 nome, spec principale, seconda spec, stato; riga 2 tutti i buff che porta.
+// Nei raid: solo nome, spec in uso e il tasto per passare all'altra spec.
 function chip(u, opzioni = {}) {
   const x = iscritto(u), k = specDi(u), sp = infoSpec(k), altra = altraDi(u);
-  const dov = opzioni.pool ? posti(u) : [];
+  const fuori = opzioni.tab && opzioni.tab.k && !x.raids.includes(opzioni.tab.k);
+  const classi = `chip${sel && sel.u === u ? " sel" : ""}${fuori ? " fuori" : ""}`;
+  const ic = (spec, cl = "") => { const i = infoSpec(spec); return `<img class="ic${cl}" src="${R.ICO(i.icona || "inv_misc_questionmark")}" alt="" title="${esc(i.nome)}" loading="lazy">`; };
+  const toggle = altra ? `<button class="sw" type="button" data-sw="${esc(u)}" title="Passa a ${esc(infoSpec(altra).nome)}">⇄</button>` : "";
+  if (!opzioni.pool) {
+    return `<div class="${classi}" style="--c:${colore(u)}" draggable="true" data-u="${esc(u)}" title="${esc((x.discord || "") + " · " + sp.nome + (fuori ? " · non si e' segnato a questo raid" : ""))}">
+      <span class="n">${esc(x.nome)}</span>${ic(k)}${toggle}</div>`;
+  }
+  const dov = posti(u);
   const posto = dov.map(d => d.panca != null ? "panca" : `R${d.r + 1}`).join(" ");
   const stato = x.stato === "ritardo" ? "⏰" : x.stato === "forse" ? "forse" : "";
   const multi = (EV.raids || []).length > 1;
   const solo = multi && x.raids.length < EV.raids.length ? EV.raids.filter(r => x.raids.includes(r.k)).map(sigla).join("+") : "";
-  const fuori = opzioni.tab && opzioni.tab.k && !x.raids.includes(opzioni.tab.k);
-  const doppia = x.alt ? `<span class="st" title="Si e' segnato anche come ${esc(infoSpec(x.alt).nome)}">${icona(infoSpec(x.alt).icona || "inv_misc_questionmark", "anche " + infoSpec(x.alt).nome)}</span>` : "";
-  return `<div class="chip${sel && sel.u === u ? " sel" : ""}${dov.length ? " messo" : ""}${fuori ? " fuori" : ""}" style="--c:${colore(u)}" draggable="true" data-u="${esc(u)}" title="${esc((x.discord || "") + (fuori ? " · non si e' segnato a questo raid" : ""))}">
-    ${icona(sp.icona || "inv_misc_questionmark", sp.nome)}<span class="n">${esc(x.nome)}</span>${doppia}<span class="s"></span>
-    ${solo ? `<span class="st" title="Segnato solo a questi raid">solo ${esc(solo)}</span>` : ""}${stato ? `<span class="st">${stato}</span>` : ""}${posto ? `<span class="st">${posto}</span>` : ""}
-    ${altra ? `<button class="sw" type="button" data-sw="${esc(u)}" title="Passa a ${esc(infoSpec(altra).nome)}">⇄</button>` : ""}
-    <span class="b">${R.buffDi(k).filter(b => b.tipo !== "utile").slice(0, 5).map(b => icona(b.icona, b.nome)).join("")}</span></div>`;
+  const tag = [solo ? `<span class="st" title="Segnato solo a questi raid">solo ${esc(solo)}</span>` : "", stato ? `<span class="st">${stato}</span>` : "", posto ? `<span class="st posto">${posto}</span>` : ""].join("");
+  const buff = R.buffDi(k).map(b => icona(b.icona, b.nome + (b.tipo === "gruppo" ? " (gruppo)" : ""))).join("");
+  return `<div class="${classi} pool${dov.length ? " messo" : ""}" style="--c:${colore(u)}" draggable="true" data-u="${esc(u)}" title="${esc(x.discord || "")}">
+    <div class="r1"><span class="n">${esc(x.nome)}</span>${ic(x.spec, k === x.spec ? " attiva" : "")}${x.alt ? ic(x.alt, k === x.alt ? " attiva" : "") : ""}<span class="tag">${tag}</span>${toggle}</div>
+    ${buff ? `<div class="r2">${buff}</div>` : ""}</div>`;
 }
 
 function disegnaPool() {
