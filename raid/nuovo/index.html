@@ -136,7 +136,7 @@ function disegnaLista() {
       <span class="quando">${esc(quando)}</span>
       ${v.stato === "ok" ? "<span>✓</span>" : `<button type="button" class="via" data-via="${v.k}" ${inCorso ? "disabled" : ""} aria-label="Togli">✕</button>`}
       <div class="campi">
-        <label>Raid<select data-f="raid" ${chiusa ? "disabled" : ""}>${R.RAID.map(r => `<option value="${r.id}" ${r.id === v.raid ? "selected" : ""}>${esc(r.nome)} (${r.taglia})</option>`).join("")}</select></label>
+        <label>Raid<select data-f="raid" ${chiusa ? "disabled" : ""}>${R.RAID.map(r => `<option value="${r.id}" ${r.id === v.raid ? "selected" : ""}>${esc(r.nome)}</option>`).join("")}</select></label>
         <label>Inizio<input type="time" data-f="ora" value="${v.ora}" ${chiusa ? "disabled" : ""}></label>
         <label>Ritrovo<input type="time" data-f="ritrovo" value="${v.ritrovo}" ${chiusa ? "disabled" : ""}></label>
       </div>
