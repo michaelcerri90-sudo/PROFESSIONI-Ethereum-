@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>I miei personaggi</title>
+<meta name="robots" content="noindex">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alegreya+SC:wght@500;700&family=Alegreya+Sans:wght@400;500;700&display=swap">
+<style>
+/* Layout: una colonna, una scheda per personaggio; in fondo "aggiungi" e "salva". */
+:root{
+  color-scheme:dark;
+  --bg:#0d1117; --panel:#151b24; --panel-2:#1c2430; --line:#2a3442; --ink:#e9e3d2; --muted:#9aa3ae;
+  --gold:#ffd000; --gold-soft:rgba(255,208,0,.12); --ok:#40c040; --bad:#ff6b5a;
+  --font-display:"Alegreya SC","Palatino Linotype",Georgia,serif;
+  --font-body:"Alegreya Sans","Segoe UI",system-ui,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{background:var(--bg)}
+body{margin:0;color:var(--ink);font-family:var(--font-body);font-size:16px;line-height:1.5;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:28px 48px}
+.wrap{max-width:760px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+h1{font-family:var(--font-display);font-size:clamp(28px,5vw,40px);margin:0;line-height:1.1}
+h1 small{display:block;font-family:var(--font-body);font-size:14px;font-weight:500;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;margin-bottom:6px}
+p{margin:0}
+.muted{color:var(--muted);font-size:14px}
+.pg{background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--c,var(--line));border-radius:6px;padding:14px;display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;align-items:end}
+label{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted);min-width:0}
+input[type=text],select{font:inherit;font-size:15px;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:4px;padding:7px 9px;width:100%;min-width:0}
+.azioni{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.def{flex-direction:row;align-items:center;gap:6px;color:var(--ink);font-size:14px}
+.btn{background:var(--gold);color:#1a1400;border:0;border-radius:4px;padding:10px 16px;font:inherit;font-weight:700;cursor:pointer}
+.btn.alt{background:transparent;color:var(--gold);border:1px solid var(--gold)}
+.btn.via{background:transparent;color:var(--bad);border:1px solid var(--line);padding:6px 10px;font-weight:500}
+.barra{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.esito{padding:10px 12px;border-radius:4px;border:1px solid var(--line);background:var(--panel)}
+.esito.ok{border-color:var(--ok)} .esito.bad{border-color:var(--bad);color:var(--bad)}
+:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+</style>
+
+<div class="wrap">
+  <h1><small>Raid Ethereum · WoW: Forever</small>I miei personaggi</h1>
+  <p class="muted" id="saluto">Caricamento...</p>
+  <p class="muted">Per ogni personaggio scegli la spec principale e, se sei pronto anche per un altro ruolo, una spec secondaria. Quello "predefinito" e' quello con cui ti iscrivi premendo Iscriviti; nel raid puoi sempre cambiarlo.</p>
+  <div id="lista"></div>
+  <div class="barra">
+    <button class="btn alt" type="button" id="aggiungi">+ Aggiungi personaggio</button>
+    <button class="btn" type="button" id="salva">Salva</button>
+  </div>
+  <div id="esito" class="esito" hidden></div>
+</div>
+
+<script src="../dati.js"></script>
+<script>
+const R = window.RAID;
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const token = (location.hash.match(/t=([\w.-]+)/) || [])[1] || "";
+let chars = [];
+
+const opzioniSpec = (classe, scelta, vuota) =>
+  (vuota ? `<option value="">${vuota}</option>` : "") +
+  R.SPEC.filter(s => s.classe === classe).map(s => `<option value="${s.chiave}" ${s.chiave === scelta ? "selected" : ""}>${esc(s.nome)} · ${R.RUOLI[s.ruolo]}</option>`).join("");
+
+function disegna() {
+  if (!chars.length) { $("lista").innerHTML = `<p class="muted">Nessun personaggio: aggiungine uno.</p>`; return; }
+  $("lista").innerHTML = chars.map((c, n) => `
+    <div class="pg" style="--c:${(R.CLASSI[c.classe] || {}).colore || "var(--line)"}" data-n="${n}">
+      <label>Nome in gioco<input type="text" data-k="nome" maxlength="24" value="${esc(c.nome)}" placeholder="es. Cornelius"></label>
+      <label>Classe<select data-k="classe"><option value="">Scegli...</option>${Object.entries(R.CLASSI).map(([k, v]) => `<option value="${k}" ${k === c.classe ? "selected" : ""}>${v.nome}</option>`).join("")}</select></label>
+      <label>Spec principale<select data-k="spec" ${c.classe ? "" : "disabled"}>${c.classe ? opzioniSpec(c.classe, c.spec, "Scegli...") : "<option>prima la classe</option>"}</select></label>
+      <label>Spec secondaria<select data-k="off" ${c.classe ? "" : "disabled"}>${c.classe ? opzioniSpec(c.classe, c.off, "nessuna") : "<option>-</option>"}</select></label>
+      <div class="azioni">
+        <label class="def"><input type="radio" name="def" data-k="def" ${c.def ? "checked" : ""}> predefinito</label>
+        <button class="btn via" type="button" data-via="${n}">Togli</button>
+      </div>
+    </div>`).join("");
+}
+
+document.addEventListener("input", e => {
+  const box = e.target.closest(".pg"); if (!box) return;
+  const c = chars[+box.dataset.n], k = e.target.dataset.k;
+  if (k === "def") { chars.forEach(x => x.def = false); c.def = true; return; }
+  c[k] = e.target.value;
+  if (k === "classe") { c.spec = ""; c.off = ""; disegna(); }
+});
+document.addEventListener("click", e => {
+  const v = e.target.closest("[data-via]");
+  if (v) { chars.splice(+v.dataset.via, 1); if (chars.length && !chars.some(x => x.def)) chars[0].def = true; disegna(); }
+});
+$("aggiungi").onclick = () => { chars.push({ id: Date.now().toString(36), nome: "", classe: "", spec: "", off: "", def: !chars.length }); disegna(); };
+
+function esito(testo, ok) { const e = $("esito"); e.hidden = false; e.className = "esito " + (ok ? "ok" : "bad"); e.textContent = testo; }
+
+$("salva").onclick = async () => {
+  const male = chars.find(c => !c.nome.trim() || !c.classe || !c.spec);
+  if (male) return esito("Ogni personaggio deve avere nome in gioco, classe e spec principale.", false);
+  if (chars.some(c => c.off && c.off === c.spec)) return esito("La spec secondaria deve essere diversa dalla principale.", false);
+  try {
+    const r = await fetch(R.RELAY + "/raid/miei", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ t: token, chars }) });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.errore || r.status);
+    chars = d.chars; disegna();
+    esito(`Salvato: ${chars.length} personaggi. Ora puoi iscriverti ai raid dal messaggio su Discord.`, true);
+  } catch (err) { esito("Salvataggio non riuscito: " + err.message, false); }
+};
+
+(async () => {
+  if (!token) { $("saluto").innerHTML = "Serve il tuo link personale: su Discord scrivi <b>/raid personaggi</b>."; return; }
+  try {
+    const r = await fetch(R.RELAY + "/raid/miei?t=" + encodeURIComponent(token));
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.errore || r.status);
+    chars = d.chars || [];
+    $("saluto").textContent = `Ciao ${d.nome || ""}! Questo link vale 24 ore ed e' solo tuo.`;
+    if (!chars.length) chars.push({ id: Date.now().toString(36), nome: "", classe: "", spec: "", off: "", def: true });
+    disegna();
+  } catch (err) { $("saluto").textContent = "Non riesco a caricare i tuoi personaggi: " + err.message; }
+})();
+</script>
+
+</html>
