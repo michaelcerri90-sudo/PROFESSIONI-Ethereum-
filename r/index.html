@@ -175,7 +175,7 @@ async function caricaRicettario() {
   try {
     const [d, mc] = await Promise.all([
       fetch(RELAY + "/dati?id=" + encodeURIComponent(id)).then(r => r.ok ? r.json() : Promise.reject(r.status)),
-      fetch("../dati/mastercraft.json?v=c48bdaf604").then(r => r.json()),
+      fetch("../dati/mastercraft.json?v=fc4fbd8c1e").then(r => r.json()),
     ]);
     const info = mc.recipes[d.prof] || {};
     d.recipes = d.recipes.filter(r => info[r.name]);
