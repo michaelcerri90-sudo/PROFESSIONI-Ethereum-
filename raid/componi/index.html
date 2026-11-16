@@ -40,6 +40,8 @@ p{margin:0}
 .chip{display:flex;align-items:center;gap:6px;padding:4px 6px;border-radius:4px;background:var(--bg);border:1px solid var(--line);border-left:4px solid var(--c);cursor:pointer;min-width:0;margin-bottom:4px;user-select:none}
 .chip.sel{outline:2px solid var(--gold)}
 .chip.messo{opacity:.4}
+.chip.fuori{border-style:dashed;border-left-style:solid;background:repeating-linear-gradient(135deg,var(--bg) 0 6px,#1a1210 6px 12px)}
+.perraid{font:inherit;font-size:13px;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:4px;padding:4px 6px}
 .chip .n{font-weight:700;color:var(--c);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .chip .s{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0}
 .chip .st{font-size:11px;color:var(--gold);white-space:nowrap}
@@ -92,7 +94,7 @@ textarea{min-height:120px;resize:vertical}
     <button class="btn" type="button" id="pubblica">Pubblica gruppi</button>
   </div>
   <div id="esito" class="esito" hidden></div>
-  <p class="muted">Clicca un giocatore e poi un posto vuoto (oppure trascinalo). Clicca un giocatore gia' messo per spostarlo; la x lo rimette tra gli iscritti. Il tasto ⇄ passa alla sua spec secondaria.</p>
+  <p class="muted">Clicca un giocatore e poi un posto vuoto (oppure trascinalo). Clicca un giocatore gia' messo per spostarlo; la x lo rimette tra gli iscritti. Il tasto ⇄ passa all'altra spec (la piccola icona accanto al nome = si e' segnato anche con quella). Chi fa piu' raid nello stesso giorno puo' stare in piu' tabelle; a strisce = non si e' segnato a quel raid.</p>
   <div class="main">
     <aside class="pool" id="pool"></aside>
     <section class="board" id="board"></section>
@@ -126,56 +128,69 @@ const $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const hash = new URLSearchParams(location.hash.slice(1));
 const token = hash.get("t") || "", evId = hash.get("e") || "";
+// EV.unita: una voce per giocatore+personaggio ({ u, nome, classe, spec, alt, off, stato, raids:[k] }).
+// Chi fa due raid dello stesso giorno con lo stesso personaggio puo' stare in tutte e due le tabelle (una volta per tabella).
 let EV = null, comp = { raids: [], panchina: [], spec: {} }, sel = null, sporco = false;
 
-const iscritto = u => EV.iscritti[u];
+const iscritto = u => EV.unita[u];
 const specDi = u => comp.spec[u] || iscritto(u).spec;
+const altraDi = u => { const x = iscritto(u), a = x.alt || x.off; return a ? (specDi(u) === x.spec ? a : x.spec) : ""; };
 const infoSpec = k => R.specPer[k] || { nome: "?", ruolo: "M", classe: "" };
 const colore = u => (R.CLASSI[iscritto(u).classe] || {}).colore || "#999";
 const icona = (n, titolo) => `<img class="ic" src="${R.ICO(n)}" alt="" title="${esc(titolo)}" loading="lazy">`;
+const raidDi = t => (EV.raids || []).find(r => r.k === t.k) || null;
+const sigla = r => r.raidNome.split(/\s+/).map(w => w[0]).join("").toUpperCase();
+const oraIt = ts => new Date(ts * 1000).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Rome" });
+const tabella = (taglia, k) => ({ k: k || null, taglia, gruppi: Array.from({ length: taglia / 5 }, () => Array(5).fill(null)) });
 
-function dove(u) {
-  for (let r = 0; r < comp.raids.length; r++)
-    for (let g = 0; g < comp.raids[r].gruppi.length; g++) {
-      const s = comp.raids[r].gruppi[g].indexOf(u);
-      if (s >= 0) return { r, g, s };
-    }
+function posti(u) {
+  const l = [];
+  comp.raids.forEach((t, r) => t.gruppi.forEach((g, gi) => { const s = g.indexOf(u); if (s >= 0) l.push({ r, g: gi, s }); }));
   const p = comp.panchina.indexOf(u);
-  return p >= 0 ? { panca: p } : null;
+  if (p >= 0) l.push({ panca: p });
+  return l;
 }
-function togli(u) {
-  const d = dove(u); if (!d) return;
-  if (d.panca != null) comp.panchina.splice(d.panca, 1); else comp.raids[d.r].gruppi[d.g][d.s] = null;
+function togliDa(u, d) {
+  if (!d) return;
+  if (d.panca != null) { const p = comp.panchina.indexOf(u); if (p >= 0) comp.panchina.splice(p, 1); }
+  else if (comp.raids[d.r] && comp.raids[d.r].gruppi[d.g][d.s] === u) comp.raids[d.r].gruppi[d.g][d.s] = null;
 }
-function metti(u, r, g, s) {
-  const prima = dove(u), occupante = comp.raids[r].gruppi[g][s];
-  togli(u);
-  if (occupante && occupante !== u) { // scambio: chi c'era va dove stava l'altro (o tra gli iscritti)
-    if (prima && prima.panca == null) comp.raids[prima.r].gruppi[prima.g][prima.s] = occupante;
-    else if (prima && prima.panca != null) comp.panchina.push(occupante);
+function togliTutto(u) { posti(u).forEach(d => togliDa(u, d)); }
+// sel = { u, da }: da = posto da cui l'ho preso (spostamento) oppure null se preso dagli iscritti (aggiunta)
+function metti(u, da, r, g, s) {
+  const occupante = comp.raids[r].gruppi[g][s];
+  if (da) togliDa(u, da);
+  // nella stessa tabella al massimo una volta
+  comp.raids[r].gruppi.forEach((gr, gi) => gr.forEach((x, si) => { if (x === u) comp.raids[r].gruppi[gi][si] = null; }));
+  if (occupante && occupante !== u) { // scambio: chi c'era va al posto da cui arrivava l'altro
+    if (da && da.panca == null && comp.raids[da.r].gruppi[da.g][da.s] == null && !comp.raids[da.r].gruppi.flat().includes(occupante)) comp.raids[da.r].gruppi[da.g][da.s] = occupante;
+    else if (da && da.panca != null) comp.panchina.push(occupante);
   }
   comp.raids[r].gruppi[g][s] = u;
   modificato();
 }
-function inPanchina(u) { togli(u); comp.panchina.push(u); modificato(); }
+function inPanchina(u, da) { if (da) togliDa(u, da); if (!comp.panchina.includes(u)) comp.panchina.push(u); modificato(); }
 function modificato() { sporco = true; sel = null; disegna(); }
 
 function chip(u, opzioni = {}) {
-  const x = iscritto(u), k = specDi(u), sp = infoSpec(k);
-  const altra = x.off && (k === x.spec ? x.off : x.spec);
-  const d = opzioni.pool ? dove(u) : null;
-  const posto = d ? (d.panca != null ? "panca" : `R${d.r + 1} G${d.g + 1}`) : "";
+  const x = iscritto(u), k = specDi(u), sp = infoSpec(k), altra = altraDi(u);
+  const dov = opzioni.pool ? posti(u) : [];
+  const posto = dov.map(d => d.panca != null ? "panca" : `R${d.r + 1}`).join(" ");
   const stato = x.stato === "ritardo" ? "⏰" : x.stato === "forse" ? "forse" : "";
-  return `<div class="chip${sel === u ? " sel" : ""}${d ? " messo" : ""}" style="--c:${colore(u)}" draggable="true" data-u="${esc(u)}" title="${esc(x.discord || "")}">
-    ${icona(sp.icona || "inv_misc_questionmark", sp.nome)}<span class="n">${esc(x.nome)}</span><span class="s">${esc(sp.nome)}</span>
-    ${stato ? `<span class="st">${stato}</span>` : ""}${posto ? `<span class="st">${posto}</span>` : ""}
+  const multi = (EV.raids || []).length > 1;
+  const solo = multi && x.raids.length < EV.raids.length ? EV.raids.filter(r => x.raids.includes(r.k)).map(sigla).join("+") : "";
+  const fuori = opzioni.tab && opzioni.tab.k && !x.raids.includes(opzioni.tab.k);
+  const doppia = x.alt ? `<span class="st" title="Si e' segnato anche come ${esc(infoSpec(x.alt).nome)}">${icona(infoSpec(x.alt).icona || "inv_misc_questionmark", "anche " + infoSpec(x.alt).nome)}</span>` : "";
+  return `<div class="chip${sel && sel.u === u ? " sel" : ""}${dov.length ? " messo" : ""}${fuori ? " fuori" : ""}" style="--c:${colore(u)}" draggable="true" data-u="${esc(u)}" title="${esc((x.discord || "") + (fuori ? " · non si e' segnato a questo raid" : ""))}">
+    ${icona(sp.icona || "inv_misc_questionmark", sp.nome)}<span class="n">${esc(x.nome)}</span><span class="s">${esc(sp.nome)}</span>${doppia}
+    ${solo ? `<span class="st" title="Segnato solo a questi raid">solo ${esc(solo)}</span>` : ""}${stato ? `<span class="st">${stato}</span>` : ""}${posto ? `<span class="st">${posto}</span>` : ""}
     ${altra ? `<button class="sw" type="button" data-sw="${esc(u)}" title="Passa a ${esc(infoSpec(altra).nome)}">⇄</button>` : ""}
     <span class="b">${R.buffDi(k).filter(b => b.tipo !== "utile").slice(0, 5).map(b => icona(b.icona, b.nome)).join("")}</span></div>`;
 }
 
 function disegnaPool() {
-  const tutti = Object.keys(EV.iscritti).filter(u => iscritto(u).stato !== "no");
-  const ruoloMain = u => infoSpec(iscritto(u).spec).ruolo; // la spec principale decide la sezione
+  const tutti = Object.keys(EV.unita);
+  const ruoloMain = u => infoSpec(iscritto(u).spec).ruolo; // la spec con cui si e' segnato decide la sezione
   const sezione = (titolo, lista) => lista.length ? `<h3>${titolo}<span>${lista.length}</span></h3>` + lista.map(u => chip(u, { pool: true })).join("") : "";
   const ordina = l => l.sort((a, b) => iscritto(a).nome.localeCompare(iscritto(b).nome));
   let html = sezione("Tank", ordina(tutti.filter(u => ruoloMain(u) === "T"))) + sezione("Healer", ordina(tutti.filter(u => ruoloMain(u) === "H")));
@@ -185,7 +200,7 @@ function disegnaPool() {
     if (l.length) html += sezione(`DPS · ${c.nome}`, l.sort((a, b) => specDi(a).localeCompare(specDi(b)) || iscritto(a).nome.localeCompare(iscritto(b).nome)));
   }
   const assenti = Object.values(EV.iscritti).filter(x => x.stato === "no");
-  if (assenti.length) html += `<h3>Assenti<span>${assenti.length}</span></h3><p class="muted">${assenti.map(x => esc(x.nome)).join(", ")}</p>`;
+  if (assenti.length) html += `<h3>Assenti<span>${assenti.length}</span></h3><p class="muted">${assenti.map(x => esc(x.discord)).join(", ")}</p>`;
   $("pool").innerHTML = `<h2>Iscritti</h2>` + (html || `<p class="muted">Ancora nessun iscritto.</p>`);
 }
 
@@ -198,19 +213,23 @@ const buffIcona = (b, chi, extra = "") => `<span class="bi${chi ? "" : " no"}" t
 
 function disegnaBoard() {
   let html = "";
+  const multi = (EV.raids || []).length > 1;
   comp.raids.forEach((raid, r) => {
     const membri = raid.gruppi.flat().filter(Boolean);
     const ruoli = { T: 0, H: 0, D: 0 };
     membri.forEach(u => { const ru = infoSpec(specDi(u)).ruolo; ruoli[ru === "T" || ru === "H" ? ru : "D"]++; });
     const pres = buffPresenti(membri);
-    html += `<div class="raid"><header><h2>Raid ${r + 1} · ${raid.taglia}</h2>
+    const rd = raidDi(raid);
+    const titolo = rd ? `${esc(rd.raidNome)} · ${oraIt(rd.ts)}` : `Raid ${r + 1}`;
+    const scegli = multi ? `<select class="perraid" data-perraid="${r}" title="A quale raid del giorno corrisponde">${EV.raids.map(x => `<option value="${x.k}" ${x.k === raid.k ? "selected" : ""}>${esc(x.raidNome)} ${oraIt(x.ts)}</option>`).join("")}</select>` : "";
+    html += `<div class="raid"><header><h2>${titolo} <span class="muted">(${raid.taglia})</span></h2>${scegli}
       <div class="conta"><span>Tank <b>${ruoli.T}</b></span><span>Healer <b>${ruoli.H}</b></span><span>DPS <b>${ruoli.D}</b></span><span>Totale <b>${membri.length}/${raid.taglia}</b></span></div>
       <span><button class="btn min" type="button" data-addon="${r}" title="Riga da incollare nell'addon RaidEthereum in gioco">Per l'addon</button> <button class="btn min" type="button" data-delraid="${r}">Togli raid</button></span></header><div class="gruppi">`;
     raid.gruppi.forEach((g, gi) => {
       const pg = buffPresenti(g.filter(Boolean));
       const gb = R.BUFF.filter(b => b.tipo === "gruppo" && pg.has(b.id));
       html += `<div class="gruppo"><div class="t"><span>Gruppo ${gi + 1}</span><span class="b">${gb.map(b => icona(b.icona, b.nome + ": " + pg.get(b.id).join(", "))).join("")}</span></div>` +
-        g.map((u, s) => u ? `<div class="slot" data-slot="${r},${gi},${s}">${chip(u)}<button class="x" type="button" data-x="${esc(u)}" title="Togli">×</button></div>`
+        g.map((u, s) => u ? `<div class="slot" data-slot="${r},${gi},${s}">${chip(u, { tab: raid })}<button class="x" type="button" data-x="${esc(u)}" data-xd="${r},${gi},${s}" title="Togli">×</button></div>`
           : `<div class="slot vuoto" data-slot="${r},${gi},${s}">+</div>`).join("") + `</div>`;
     });
     html += `</div><div class="buff">`;
@@ -224,40 +243,57 @@ function disegnaBoard() {
     html += `<div class="riga"><span class="l">${R.TIPI.gruppo} (gruppi coperti)</span>${grp.join("")}</div></div></div>`;
   });
   if (!comp.raids.length) html += `<p class="muted">Aggiungi un raid da 10, 20 o 40 con i bottoni in alto.</p>`;
-  html += `<h3>Panchina<span>${comp.panchina.length}</span></h3><div class="panca" id="panca">${comp.panchina.map(u => `<div class="slot" data-pancaslot="1">${chip(u)}<button class="x" type="button" data-x="${esc(u)}">×</button></div>`).join("") || `<p class="muted">Clicca un giocatore e poi qui per metterlo in panchina.</p>`}</div>`;
+  html += `<h3>Panchina<span>${comp.panchina.length}</span></h3><div class="panca" id="panca">${comp.panchina.map((u, i) => `<div class="slot" data-pancaslot="${i}">${chip(u)}<button class="x" type="button" data-x="${esc(u)}" data-xp="1">×</button></div>`).join("") || `<p class="muted">Clicca un giocatore e poi qui per metterlo in panchina.</p>`}</div>`;
   $("board").innerHTML = html;
 }
 function disegna() { disegnaPool(); disegnaBoard(); }
 
+// da dove viene la chip cliccata/trascinata: un posto in tabella, la panchina o gli iscritti
+function origine(el) {
+  const slot = el.closest("[data-slot]");
+  if (slot) { const [r, g, s] = slot.dataset.slot.split(",").map(Number); return { r, g, s }; }
+  if (el.closest("[data-pancaslot]")) return { panca: 1 };
+  return null;
+}
+document.addEventListener("change", e => {
+  const pr = e.target.closest("[data-perraid]");
+  if (pr) { comp.raids[+pr.dataset.perraid].k = pr.value; modificato(); }
+});
 document.addEventListener("click", e => {
+  if (e.target.closest("select")) return;
   const sw = e.target.closest("[data-sw]");
-  if (sw) { const u = sw.dataset.sw, x = iscritto(u); comp.spec[u] = specDi(u) === x.spec ? x.off : x.spec; modificato(); return; }
+  if (sw) { const u = sw.dataset.sw; comp.spec[u] = altraDi(u); if (comp.spec[u] === iscritto(u).spec) delete comp.spec[u]; modificato(); return; }
   const xb = e.target.closest("[data-x]");
-  if (xb) { togli(xb.dataset.x); modificato(); return; }
+  if (xb) {
+    const u = xb.dataset.x;
+    if (xb.dataset.xd) { const [r, g, s] = xb.dataset.xd.split(",").map(Number); togliDa(u, { r, g, s }); } else togliDa(u, { panca: 1 });
+    modificato(); return;
+  }
   const add = e.target.closest("[data-add]");
-  if (add) { const t = +add.dataset.add; comp.raids.push({ taglia: t, gruppi: Array.from({ length: t / 5 }, () => Array(5).fill(null)) }); modificato(); return; }
+  if (add) { const t = +add.dataset.add; const libero = (EV.raids || []).find(x => x.taglia === t && !comp.raids.some(y => y.k === x.k)); comp.raids.push(tabella(t, libero ? libero.k : (EV.raids[0] || {}).k)); modificato(); return; }
   const ad = e.target.closest("[data-addon]");
   if (ad) { mostraAddon(+ad.dataset.addon); return; }
   const del = e.target.closest("[data-delraid]");
   if (del) { comp.raids.splice(+del.dataset.delraid, 1); modificato(); return; }
   const slot = e.target.closest("[data-slot]");
   const c = e.target.closest(".chip");
-  if (slot && slot.classList.contains("vuoto")) { if (sel) { const [r, g, s] = slot.dataset.slot.split(",").map(Number); metti(sel, r, g, s); } return; }
-  if (slot && c && sel && sel !== c.dataset.u) { const [r, g, s] = slot.dataset.slot.split(",").map(Number); metti(sel, r, g, s); return; }
-  if (e.target.closest("#panca") && sel && !c) { inPanchina(sel); return; }
-  if (c) { sel = sel === c.dataset.u ? null : c.dataset.u; disegna(); }
+  if (slot && slot.classList.contains("vuoto")) { if (sel) { const [r, g, s] = slot.dataset.slot.split(",").map(Number); metti(sel.u, sel.da, r, g, s); } return; }
+  if (slot && c && sel && sel.u !== c.dataset.u) { const [r, g, s] = slot.dataset.slot.split(",").map(Number); metti(sel.u, sel.da, r, g, s); return; }
+  if (e.target.closest("#panca") && sel && !c) { inPanchina(sel.u, sel.da); return; }
+  if (c) { sel = sel && sel.u === c.dataset.u ? null : { u: c.dataset.u, da: origine(c) }; disegna(); }
 });
 // trascina e lascia
-document.addEventListener("dragstart", e => { const c = e.target.closest(".chip"); if (c) { e.dataTransfer.setData("text/plain", c.dataset.u); sel = c.dataset.u; } });
+document.addEventListener("dragstart", e => { const c = e.target.closest(".chip"); if (c) { e.dataTransfer.setData("text/plain", c.dataset.u); sel = { u: c.dataset.u, da: origine(c) }; } });
 document.addEventListener("dragover", e => { const t = e.target.closest("[data-slot], #panca, #pool"); if (t) { e.preventDefault(); t.classList.add("over"); } });
 document.addEventListener("dragleave", e => { const t = e.target.closest("[data-slot], #panca"); if (t) t.classList.remove("over"); });
 document.addEventListener("drop", e => {
-  const u = e.dataTransfer.getData("text/plain"); if (!u || !EV.iscritti[u]) return;
+  const u = e.dataTransfer.getData("text/plain"); if (!u || !EV.unita[u]) return;
   e.preventDefault();
+  const da = sel && sel.u === u ? sel.da : null;
   const slot = e.target.closest("[data-slot]");
-  if (slot) { const [r, g, s] = slot.dataset.slot.split(",").map(Number); metti(u, r, g, s); }
-  else if (e.target.closest("#panca")) inPanchina(u);
-  else if (e.target.closest("#pool")) { togli(u); modificato(); }
+  if (slot) { const [r, g, s] = slot.dataset.slot.split(",").map(Number); metti(u, da, r, g, s); }
+  else if (e.target.closest("#panca")) inPanchina(u, da);
+  else if (e.target.closest("#pool")) { if (da) togliDa(u, da); modificato(); }
 });
 
 function esito(testo, ok) { const x = $("esito"); x.hidden = false; x.className = "esito " + (ok ? "ok" : "bad"); x.textContent = testo; }
@@ -294,11 +330,12 @@ $("dlg").addEventListener("close", async () => {
 });
 // riga per l'addon: RE1|id|raid|inizio|ritrovo|referente|gruppo1;gruppo2;...|panchina (nomi separati da virgola)
 function mostraAddon(r) {
-  const raid = comp.raids[r];
+  const raid = comp.raids[r], rd = raidDi(raid) || EV.raids[0];
   const nomi = l => l.filter(Boolean).map(u => iscritto(u).nome.replace(/[|;,]/g, "")).join(",");
-  const ritrovo = EV.ritrovo || EV.ts - 1800;
+  const ritrovo = rd.ritrovo || rd.ts - 1800;
   const ref = ($("referente").value || "").replace(/[|;,]/g, "").trim();
-  const riga = ["RE1", `${EV.id}-${r + 1}`, `${EV.raidNome}${comp.raids.length > 1 ? " " + (r + 1) : ""}`, EV.ts, ritrovo, ref,
+  const stessi = comp.raids.filter(t => (raidDi(t) || EV.raids[0]).k === rd.k).length > 1;
+  const riga = ["RE1", `${EV.id}-${r + 1}`, `${rd.raidNome}${stessi ? " " + (r + 1) : ""}`, rd.ts, ritrovo, ref,
     raid.gruppi.map(nomi).join(";"), nomi(comp.panchina)].join("|");
   $("addonTxt").value = riga;
   $("dlgAddon").showModal();
@@ -312,13 +349,14 @@ window.addEventListener("beforeunload", e => { if (sporco) { e.preventDefault();
     const r = await fetch(`${R.RELAY}/raid/evento?t=${encodeURIComponent(token)}&id=${encodeURIComponent(evId)}`);
     const d = await r.json();
     if (!r.ok) throw new Error(d.errore || r.status);
-    EV = d;
-    $("titolo").textContent = `${d.raidNome} · ${d.taglia}`;
+    EV = d; EV.unita = EV.unita || {}; EV.raids = EV.raids || [];
+    $("titolo").textContent = EV.raids.length > 1 ? d.raidNome : `${d.raidNome} · ${d.taglia}`;
     const quando = new Date(d.ts * 1000).toLocaleString("it-IT", { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" });
-    const n = Object.values(d.iscritti).filter(x => x.stato !== "no").length;
-    $("sotto").textContent = `${quando} · ${n} iscritti` + (d.bozzaDi ? ` · bozza salvata da ${d.bozzaDi}` : "") + (d.pubblicato ? " · gruppi gia' pubblicati" : "");
+    const n = new Set(Object.values(EV.unita).map(x => x.u)).size;
+    $("sotto").textContent = `${quando} · ${n} iscritti` + (EV.raids.length > 1 ? ` · ${EV.raids.length} raid nello stesso giorno: dividi tu i giocatori tra le tabelle` : "") + (d.bozzaDi ? ` · bozza salvata da ${d.bozzaDi}` : "") + (d.pubblicato ? " · gruppi gia' pubblicati" : "");
     if (d.bozza) comp = { raids: d.bozza.raids || [], panchina: d.bozza.panchina || [], spec: d.bozza.spec || {} };
-    if (!comp.raids.length) { const t = d.taglia; comp.raids.push({ taglia: t, gruppi: Array.from({ length: t / 5 }, () => Array(5).fill(null)) }); }
+    // una tabella per ogni raid del giorno che non ne ha ancora una
+    for (const x of EV.raids) if (!comp.raids.some(t => t.k === x.k)) comp.raids.push(tabella(x.taglia, x.k));
     if (d.pubblicato) { $("ritrovo").value = d.pubblicato.ritrovo || ""; $("referente").value = d.pubblicato.referente || ""; $("consumabili").value = d.pubblicato.consumabili || ""; }
     else if (d.ritrovo) $("ritrovo").value = new Date(d.ritrovo * 1000).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Rome" });
     disegna();

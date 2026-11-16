@@ -74,7 +74,7 @@ input,select{font:inherit;color:var(--ink);background:var(--bg);border:1px solid
 
   <section class="box">
     <h2>2 · Giorni</h2>
-    <p class="aiuto">Tocca un giorno per aggiungere il raid scelto sopra. Puoi cambiare raid e toccare altri giorni: li crei tutti insieme. Tocca di nuovo per toglierlo.</p>
+    <p class="aiuto">Tocca un giorno per aggiungere il raid scelto sopra. Puoi cambiare raid e toccare altri giorni: li crei tutti insieme. Tocca di nuovo per toglierlo. I raid dello stesso giorno finiscono nello stesso canale, con un'unica lista di iscritti.</p>
     <div class="mese"><button type="button" id="prev" aria-label="Mese prima">‹</button><b id="meseNome"></b><button type="button" id="next" aria-label="Mese dopo">›</button></div>
     <div class="cal" id="cal"></div>
   </section>
@@ -144,7 +144,8 @@ function disegnaLista() {
     </div>`;
   }).join("") : `<p class="vuota">Ancora nessuno: scegli il raid e tocca i giorni nel calendario.</p>`;
   const daFare = voci.filter(v => v.stato !== "ok").length;
-  $("crea").textContent = inCorso ? "Creo i raid..." : daFare > 1 ? `Crea ${daFare} raid e i loro canali` : "Crea raid e canale";
+  const nGiorni = new Set(voci.filter(v => v.stato !== "ok").map(v => v.data)).size;
+  $("crea").textContent = inCorso ? "Creo i raid..." : daFare > 1 ? `Crea ${daFare} raid (${nGiorni} ${nGiorni === 1 ? "canale" : "canali"})` : "Crea raid e canale";
   $("crea").disabled = inCorso || !daFare;
 }
 function tutto() { disegnaRaid(); disegnaCal(); disegnaLista(); }
@@ -176,21 +177,24 @@ function esito(html, ok) { const x = $("esito"); x.hidden = false; x.className =
 $("crea").onclick = async () => {
   if (!token || !cid) return esito("Serve il link del bot: su Discord scrivi <b>/raid crea</b>.", false);
   inCorso = true; $("esito").hidden = true; disegnaLista();
-  for (const v of voci.filter(x => x.stato !== "ok")) {
-    v.stato = ""; v.msg = "Creo...";
+  // i raid dello stesso giorno vanno insieme: un canale e un'unica lista di iscritti per il giorno
+  const giorni = [...new Set(voci.filter(x => x.stato !== "ok").map(x => x.data))].sort();
+  for (const giorno of giorni) {
+    const quelli = voci.filter(x => x.data === giorno && x.stato !== "ok");
+    quelli.forEach(v => { v.stato = ""; v.msg = "Creo..."; });
     disegnaLista();
     try {
       const res = await fetch(R.RELAY + "/raid/nuovo", { method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ t: token, c: cid, raid: v.raid, data: v.data, ora: v.ora, ritrovo: v.ritrovo, note: $("note").value }) });
+        body: JSON.stringify({ t: token, c: cid, data: giorno, note: $("note").value, raids: quelli.map(v => ({ raid: v.raid, ora: v.ora, ritrovo: v.ritrovo })) }) });
       const d = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(d.errore || res.status);
-      v.stato = "ok";
-      v.msg = `${d.canale ? `Canale <b>#${esc(d.canale)}</b> creato. ` : ""}<a href="${esc(d.link)}">Apri su Discord</a>${d.avviso ? `<br>${esc(d.avviso)}` : ""}`;
-    } catch (err) { v.stato = "bad"; v.msg = "Non riuscito: " + esc(err.message); }
+      const testo = `${d.canale ? `Canale <b>#${esc(d.canale)}</b> creato. ` : d.aggiunto ? "Aggiunto al canale gia' aperto per questo giorno. " : ""}<a href="${esc(d.link)}">Apri su Discord</a>${d.avviso ? `<br>${esc(d.avviso)}` : ""}`;
+      quelli.forEach(v => { v.stato = "ok"; v.msg = testo; });
+    } catch (err) { quelli.forEach(v => { v.stato = "bad"; v.msg = "Non riuscito: " + esc(err.message); }); }
   }
   inCorso = false; disegnaCal(); disegnaLista();
   const male = voci.filter(v => v.stato === "bad").length;
-  esito(male ? `${male} raid non creati: controlla l'errore sulla riga e premi di nuovo Crea.` : "Fatto! Tutti i raid sono su Discord, ognuno nel suo canale.", !male);
+  esito(male ? `${male} raid non creati: controlla l'errore sulla riga e premi di nuovo Crea.` : "Fatto! Tutti i raid sono su Discord: un canale per ogni giorno.", !male);
 };
 if (!token || !cid) esito("Serve il link del bot: su Discord scrivi <b>/raid crea</b>.", false);
 tutto();

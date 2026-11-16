@@ -41,7 +41,7 @@ input[type=text],select{font:inherit;font-size:15px;color:var(--ink);background:
 <div class="wrap">
   <h1><small>Raid Ethereum · WoW: Forever</small>I miei personaggi</h1>
   <p class="muted" id="saluto">Caricamento...</p>
-  <p class="muted">Per ogni personaggio scegli la spec principale e, se sei pronto anche per un altro ruolo, una spec secondaria. Quello "predefinito" e' quello con cui ti iscrivi premendo Iscriviti; nel raid puoi sempre cambiarlo.</p>
+  <p class="muted">Per ogni personaggio scegli la spec principale e, se sei pronto anche per un altro ruolo, una spec secondaria. Quello "predefinito" e' quello con cui ti iscrivi premendo Iscriviti. Se spunti "mi segno anche con la secondaria" ti iscrive con tutte e due (es. Restoration, anche Feral se serve): la principale decide se stai tra tank/healer o tra i DPS. Nel raid puoi sempre cambiarlo.</p>
   <div id="lista"></div>
   <div class="barra">
     <button class="btn alt" type="button" id="aggiungi">+ Aggiungi personaggio</button>
@@ -71,6 +71,7 @@ function disegna() {
       <label>Classe<select data-k="classe"><option value="">Scegli...</option>${Object.entries(R.CLASSI).map(([k, v]) => `<option value="${k}" ${k === c.classe ? "selected" : ""}>${v.nome}</option>`).join("")}</select></label>
       <label>Spec principale<select data-k="spec" ${c.classe ? "" : "disabled"}>${c.classe ? opzioniSpec(c.classe, c.spec, "Scegli...") : "<option>prima la classe</option>"}</select></label>
       <label>Spec secondaria<select data-k="off" ${c.classe ? "" : "disabled"}>${c.classe ? opzioniSpec(c.classe, c.off, "nessuna") : "<option>-</option>"}</select></label>
+      <label class="def" title="Quando premi Iscriviti ti segna con tutte e due: prima la principale, poi la secondaria se serve"><input type="checkbox" data-k="doppia" ${c.doppia ? "checked" : ""} ${c.off ? "" : "disabled"}> mi segno anche con la secondaria</label>
       <div class="azioni">
         <label class="def"><input type="radio" name="def" data-k="def" ${c.def ? "checked" : ""}> predefinito</label>
         <button class="btn via" type="button" data-via="${n}">Togli</button>
@@ -82,8 +83,9 @@ document.addEventListener("input", e => {
   const box = e.target.closest(".pg"); if (!box) return;
   const c = chars[+box.dataset.n], k = e.target.dataset.k;
   if (k === "def") { chars.forEach(x => x.def = false); c.def = true; return; }
-  c[k] = e.target.value;
-  if (k === "classe") { c.spec = ""; c.off = ""; disegna(); }
+  c[k] = e.target.type === "checkbox" ? e.target.checked : e.target.value;
+  if (k === "off") { if (!c.off) c.doppia = false; disegna(); }
+  if (k === "classe") { c.spec = ""; c.off = ""; c.doppia = false; disegna(); }
 });
 document.addEventListener("click", e => {
   const v = e.target.closest("[data-via]");
