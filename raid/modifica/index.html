@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Modifica raid</title>
+<meta name="robots" content="noindex">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alegreya+SC:wght@500;700&family=Alegreya+Sans:wght@400;500;700&display=swap">
+<style>
+/* Layout: giorno sul calendario -> raid del giorno (tipo e orari modificabili, togli, aggiungi) -> note -> Salva. Le iscrizioni restano. */
+:root{
+  color-scheme:dark;
+  --bg:#0d1117; --panel:#151b24; --panel-2:#1c2430; --line:#2a3442; --ink:#e9e3d2; --muted:#9aa3ae;
+  --gold:#ffd000; --gold-soft:rgba(255,208,0,.14); --ok:#40c040; --bad:#ff6b5a;
+  --font-display:"Alegreya SC","Palatino Linotype",Georgia,serif;
+  --font-body:"Alegreya Sans","Segoe UI",system-ui,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{background:var(--bg)}
+body{margin:0;color:var(--ink);font-family:var(--font-body);font-size:16px;line-height:1.45;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:24px 48px}
+.wrap{max-width:620px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+h1{font-family:var(--font-display);font-size:clamp(28px,5vw,40px);margin:0;line-height:1.1}
+h1 small{display:block;font-family:var(--font-body);font-size:14px;font-weight:500;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;margin-bottom:6px}
+h2{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0 0 8px;font-weight:500}
+p{margin:0}
+.muted{color:var(--muted);font-size:14px}
+.box{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:14px}
+.mese{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.mese b{font-family:var(--font-display);font-size:20px;text-transform:capitalize}
+.mese button{background:var(--panel-2);border:1px solid var(--line);color:var(--ink);border-radius:4px;width:36px;height:32px;cursor:pointer;font-size:18px}
+.mese button:disabled{opacity:.3;cursor:default}
+.cal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px;text-align:center}
+.cal .dg{font-size:12px;color:var(--muted);padding:2px 0}
+.cal button{background:var(--bg);border:1px solid var(--line);border-radius:5px;color:var(--ink);font:inherit;padding:9px 0;cursor:pointer;font-variant-numeric:tabular-nums}
+.cal button:disabled{opacity:.3;cursor:default}
+.cal button.oggi{border-color:var(--muted)}
+.cal button.prima{box-shadow:inset 0 -3px 0 var(--muted)}
+.cal button[aria-pressed="true"]{background:var(--gold);color:#1a1400;border-color:var(--gold);font-weight:700}
+label{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted)}
+input,select{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:4px;padding:8px 10px;width:100%;min-width:0}
+.lista{display:flex;flex-direction:column;gap:8px}
+.riga .r{grid-column:1 / -1}
+.riga{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto;gap:6px;align-items:end;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:10px}
+.riga.nuova{border-color:var(--gold)}
+.riga label{font-size:12px}
+.riga input,.riga select{padding:6px 7px;font-size:15px}
+.riga .info{grid-column:1 / -1;font-size:13px;color:var(--muted)}
+.riga .via{background:transparent;border:1px solid var(--line);color:var(--bad);border-radius:4px;padding:6px 10px;cursor:pointer;font:inherit}
+.agg{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;align-items:center}
+.agg button{background:var(--panel-2);border:1px solid var(--line);color:var(--ink);border-radius:4px;padding:8px 12px;font:inherit;cursor:pointer}
+.btn{background:var(--gold);color:#1a1400;border:0;border-radius:4px;padding:12px 18px;font:inherit;font-weight:700;cursor:pointer;width:100%}
+.btn:disabled{opacity:.5;cursor:default}
+.esito{padding:10px 12px;border-radius:4px;border:1px solid var(--line);background:var(--panel);overflow-wrap:anywhere}
+.esito.ok{border-color:var(--ok)} .esito.bad{border-color:var(--bad);color:var(--bad)}
+.esito a{color:var(--gold)}
+:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+</style>
+
+<div class="wrap">
+  <h1><small>Raid Ethereum</small><span id="titolo">Modifica raid</span></h1>
+  <p class="muted" id="sotto">Caricamento...</p>
+
+  <section class="box">
+    <h2>Giorno</h2>
+    <div class="mese"><button type="button" id="prev" aria-label="Mese prima">‹</button><b id="meseNome"></b><button type="button" id="next" aria-label="Mese dopo">›</button></div>
+    <div class="cal" id="cal"></div>
+  </section>
+
+  <section class="box">
+    <h2>Raid di quel giorno</h2>
+    <div class="lista" id="lista"></div>
+    <div class="agg"><span class="muted">Aggiungi:</span><span id="aggiungi"></span></div>
+  </section>
+
+  <section class="box">
+    <label>Note (facoltative)<input type="text" id="note" maxlength="300" placeholder="es. portate le resistenze al fuoco"></label>
+  </section>
+
+  <button class="btn" type="button" id="salva" disabled>Salva modifiche</button>
+  <div id="esito" class="esito" hidden></div>
+</div>
+
+<script src="../dati.js"></script>
+<script>
+const R = window.RAID;
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const h = new URLSearchParams(location.hash.slice(1));
+const token = h.get("t") || "", evId = h.get("e") || "";
+const oggi = new Date(); oggi.setHours(0, 0, 0, 0);
+const iso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+const oraIt = ts => new Date(ts * 1000).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Rome" });
+const giornoIt = ts => new Date(ts * 1000).toLocaleDateString("sv-SE", { timeZone: "Europe/Rome" });
+let EV = null, giorno = null, giornoPrima = null, mese = new Date(oggi.getFullYear(), oggi.getMonth(), 1);
+let righe = []; // { k (vuoto se nuova), raid, ora, ritrovo }
+const iscrittiA = k => new Set(Object.values(EV.unita || {}).filter(x => x.raids.includes(k)).map(x => x.u)).size;
+
+function disegnaCal() {
+  $("meseNome").textContent = mese.toLocaleDateString("it-IT", { month: "long", year: "numeric" });
+  $("prev").disabled = mese <= new Date(oggi.getFullYear(), oggi.getMonth(), 1);
+  const primo = (mese.getDay() + 6) % 7;
+  const giorni = new Date(mese.getFullYear(), mese.getMonth() + 1, 0).getDate();
+  let html = ["lu", "ma", "me", "gi", "ve", "sa", "do"].map(d => `<span class="dg">${d}</span>`).join("") + "<span></span>".repeat(primo);
+  for (let g = 1; g <= giorni; g++) {
+    const d = new Date(mese.getFullYear(), mese.getMonth(), g), k = iso(d);
+    html += `<button type="button" data-g="${k}" ${d < oggi ? "disabled" : ""} class="${+d === +oggi ? "oggi" : ""} ${k === giornoPrima ? "prima" : ""}" aria-pressed="${giorno === k}">${g}</button>`;
+  }
+  $("cal").innerHTML = html;
+}
+function disegnaLista() {
+  $("lista").innerHTML = righe.map((r, n) => {
+    const quanti = r.k ? iscrittiA(r.k) : 0;
+    return `<div class="riga ${r.k ? "" : "nuova"}" data-n="${n}">
+      <label class="r">Raid<select data-f="raid">${R.RAID.map(x => `<option value="${x.id}" ${x.id === r.raid ? "selected" : ""}>${esc(x.nome)}</option>`).join("")}</select></label>
+      <label>Inizio<input type="time" data-f="ora" value="${r.ora}"></label>
+      <label>Ritrovo<input type="time" data-f="ritrovo" value="${r.ritrovo}"></label>
+      <button type="button" class="via" data-via="${n}" ${righe.length < 2 ? "disabled title=\"Serve almeno un raid\"" : ""} aria-label="Togli">✕</button>
+      <span class="info">${r.k ? `${quanti} iscritti: restano anche se cambi raid o orario` : "Nuovo: chi era segnato a tutti i raid del giorno viene segnato anche qui"}</span>
+    </div>`;
+  }).join("");
+  $("aggiungi").innerHTML = R.RAID.map(x => `<button type="button" data-add="${x.id}">+ ${esc(x.nome)}</button>`).join(" ");
+}
+function tutto() { disegnaCal(); disegnaLista(); }
+
+document.addEventListener("click", e => {
+  const g = e.target.closest("[data-g]"); if (g && !g.disabled) { giorno = g.dataset.g; disegnaCal(); return; }
+  const a = e.target.closest("[data-add]"); if (a) { righe.push({ k: "", raid: a.dataset.add, ora: "21:30", ritrovo: "21:00" }); disegnaLista(); return; }
+  const v = e.target.closest("[data-via]");
+  if (v && !v.disabled) {
+    const r = righe[+v.dataset.via], quanti = r.k ? iscrittiA(r.k) : 0;
+    if (quanti && !confirm(`Togliere ${R.RAID.find(x => x.id === r.raid).nome}? ${quanti} giocatori erano segnati a questo raid: chi era segnato solo qui non sara' piu' in nessun raid del giorno.`)) return;
+    righe.splice(+v.dataset.via, 1); disegnaLista();
+  }
+});
+document.addEventListener("change", e => {
+  const riga = e.target.closest(".riga"), f = e.target.dataset.f; if (!riga || !f) return;
+  righe[+riga.dataset.n][f] = e.target.value;
+});
+$("prev").onclick = () => { mese = new Date(mese.getFullYear(), mese.getMonth() - 1, 1); disegnaCal(); };
+$("next").onclick = () => { mese = new Date(mese.getFullYear(), mese.getMonth() + 1, 1); disegnaCal(); };
+
+function esito(html, ok) { const x = $("esito"); x.hidden = false; x.className = "esito " + (ok ? "ok" : "bad"); x.innerHTML = html; }
+$("salva").onclick = async () => {
+  $("salva").disabled = true; esito("Salvo...", true);
+  try {
+    const res = await fetch(R.RELAY + "/raid/modifica", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ t: token, id: evId, data: giorno, note: $("note").value, raids: righe.map(r => ({ k: r.k || undefined, raid: r.raid, ora: r.ora, ritrovo: r.ritrovo })) }) });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(d.errore || res.status);
+    esito(`Salvato! Il messaggio del raid e' aggiornato e nel canale c'e' un avviso per chi e' gia' segnato. <a href="${esc(d.link)}">Apri su Discord</a>`, true);
+    await carica();
+  } catch (err) { esito("Non salvato: " + esc(err.message), false); }
+  $("salva").disabled = false;
+};
+
+async function carica() {
+  const r = await fetch(`${R.RELAY}/raid/evento?t=${encodeURIComponent(token)}&id=${encodeURIComponent(evId)}`);
+  const d = await r.json();
+  if (!r.ok) throw new Error(d.errore || r.status);
+  EV = d;
+  giorno = giornoPrima = d.data || giornoIt(d.ts);
+  const [y, m] = giorno.split("-").map(Number);
+  mese = new Date(y, m - 1, 1);
+  righe = d.raids.map(x => ({ k: x.k, raid: x.raid, ora: oraIt(x.ts), ritrovo: x.ritrovo ? oraIt(x.ritrovo) : "" }));
+  $("note").value = d.note || "";
+  $("titolo").textContent = d.raidNome;
+  const n = new Set(Object.values(d.unita || {}).map(x => x.u)).size;
+  $("sotto").textContent = `${new Date(d.ts * 1000).toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long" })} · ${n} iscritti. Cambia quello che serve e premi Salva: le iscrizioni restano.`;
+  $("salva").disabled = false;
+  tutto();
+}
+(async () => {
+  if (!token || !evId) { $("sotto").innerHTML = "Serve il link del bot: nel canale del raid scrivi <b>/raid modifica</b>."; return; }
+  try { await carica(); } catch (err) { $("sotto").textContent = "Non riesco ad aprire il raid: " + err.message; }
+})();
+</script>
+
+</html>
