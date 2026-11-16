@@ -6,49 +6,49 @@ window.RAID = (function () {
   const ICO = n => `https://wow.zamimg.com/images/wow/icons/medium/${n}.jpg`;
 
   const CLASSI = {
-    DRUID:   { nome: "Druid",   colore: "#ff7c0a", icona: "classicon_druid" },
-    HUNTER:  { nome: "Hunter",  colore: "#aad372", icona: "classicon_hunter" },
-    MAGE:    { nome: "Mage",    colore: "#3fc7eb", icona: "classicon_mage" },
-    PALADIN: { nome: "Paladin", colore: "#f48cba", icona: "classicon_paladin" },
-    PRIEST:  { nome: "Priest",  colore: "#ffffff", icona: "classicon_priest" },
-    ROGUE:   { nome: "Rogue",   colore: "#fff468", icona: "classicon_rogue" },
-    SHAMAN:  { nome: "Shaman",  colore: "#0070dd", icona: "classicon_shaman" },
-    WARLOCK: { nome: "Warlock", colore: "#8788ee", icona: "classicon_warlock" },
-    WARRIOR: { nome: "Warrior", colore: "#c69b6d", icona: "classicon_warrior" },
+    DRUID:   { nome: "Druido",   colore: "#ff7c0a", icona: "classicon_druid" },
+    HUNTER:  { nome: "Cacciatore",  colore: "#aad372", icona: "classicon_hunter" },
+    MAGE:    { nome: "Mago",    colore: "#3fc7eb", icona: "classicon_mage" },
+    PALADIN: { nome: "Paladino", colore: "#f48cba", icona: "classicon_paladin" },
+    PRIEST:  { nome: "Sacerdote",  colore: "#ffffff", icona: "classicon_priest" },
+    ROGUE:   { nome: "Ladro",   colore: "#fff468", icona: "classicon_rogue" },
+    SHAMAN:  { nome: "Sciamano",  colore: "#0070dd", icona: "classicon_shaman" },
+    WARLOCK: { nome: "Stregone", colore: "#8788ee", icona: "classicon_warlock" },
+    WARRIOR: { nome: "Guerriero", colore: "#c69b6d", icona: "classicon_warrior" },
   };
 
   // ruolo: T tank, H healer, M melee, R ranged. Le spec che fanno due ruoli sono divise in due voci.
   const SPEC = [
-    ["DRUID", "balance", "Balance", "R", "spell_nature_starfall"],
-    ["DRUID", "feral-tank", "Feral (tank)", "T", "ability_racial_bearform"],
-    ["DRUID", "feral-dps", "Feral (DPS)", "M", "ability_druid_catform"],
-    ["DRUID", "resto", "Restoration", "H", "spell_nature_healingtouch"],
-    ["HUNTER", "bm", "Beast Mastery", "R", "ability_hunter_beasttaming"],
-    ["HUNTER", "mm", "Marksmanship", "R", "ability_marksmanship"],
-    ["HUNTER", "sv-melee", "Survival (melee)", "M", "ability_hunter_swiftstrike"],
-    ["HUNTER", "sv-ranged", "Survival (ranged)", "R", "ability_hunter_swiftstrike"],
-    ["MAGE", "arcane", "Arcane", "R", "spell_holy_magicalsentry"],
-    ["MAGE", "fire", "Fire", "R", "spell_fire_firebolt02"],
-    ["MAGE", "frost", "Frost", "R", "spell_frost_frostbolt02"],
-    ["PALADIN", "holy", "Holy", "H", "spell_holy_holybolt"],
-    ["PALADIN", "prot", "Protection", "T", "spell_holy_devotionaura"],
-    ["PALADIN", "ret", "Retribution", "M", "spell_holy_auraoflight"],
-    ["PRIEST", "disc", "Discipline", "H", "spell_holy_wordfortitude"],
-    ["PRIEST", "holy", "Holy", "H", "spell_holy_holybolt"],
-    ["PRIEST", "shadow", "Shadow", "R", "spell_shadow_shadowwordpain"],
-    ["ROGUE", "assa", "Assassination", "M", "ability_rogue_eviscerate"],
-    ["ROGUE", "combat", "Combat", "M", "ability_backstab"],
-    ["ROGUE", "sub", "Subtlety", "M", "ability_stealth"],
-    ["SHAMAN", "ele", "Elemental", "R", "spell_nature_lightning"],
-    ["SHAMAN", "enh-dps", "Enhancement (DPS)", "M", "spell_nature_lightningshield"],
-    ["SHAMAN", "enh-tank", "Enhancement (tank)", "T", "spell_nature_lightningshield"],
-    ["SHAMAN", "resto", "Restoration", "H", "spell_nature_magicimmunity"],
-    ["WARLOCK", "affli", "Affliction", "R", "spell_shadow_deathcoil"],
-    ["WARLOCK", "demo", "Demonology", "R", "spell_shadow_metamorphosis"],
-    ["WARLOCK", "destro", "Destruction", "R", "spell_shadow_rainoffire"],
-    ["WARRIOR", "arms", "Arms", "M", "ability_warrior_savageblow"],
-    ["WARRIOR", "fury", "Fury", "M", "ability_warrior_innerrage"],
-    ["WARRIOR", "prot", "Protection", "T", "ability_warrior_defensivestance"],
+    ["DRUID", "balance", "Equilibrio", "R", "spell_nature_starfall"],
+    ["DRUID", "feral-tank", "Ferino (tank)", "T", "ability_racial_bearform"],
+    ["DRUID", "feral-dps", "Ferino (DPS)", "M", "ability_druid_catform"],
+    ["DRUID", "resto", "Rigenerazione", "H", "spell_nature_healingtouch"],
+    ["HUNTER", "bm", "Affinita' Animale", "R", "ability_hunter_beasttaming"],
+    ["HUNTER", "mm", "Precisione", "R", "ability_marksmanship"],
+    ["HUNTER", "sv-melee", "Sopravvivenza (mischia)", "M", "ability_hunter_swiftstrike"],
+    ["HUNTER", "sv-ranged", "Sopravvivenza (distanza)", "R", "ability_hunter_swiftstrike"],
+    ["MAGE", "arcane", "Arcano", "R", "spell_holy_magicalsentry"],
+    ["MAGE", "fire", "Fuoco", "R", "spell_fire_firebolt02"],
+    ["MAGE", "frost", "Gelo", "R", "spell_frost_frostbolt02"],
+    ["PALADIN", "holy", "Sacro", "H", "spell_holy_holybolt"],
+    ["PALADIN", "prot", "Protezione", "T", "spell_holy_devotionaura"],
+    ["PALADIN", "ret", "Castigo", "M", "spell_holy_auraoflight"],
+    ["PRIEST", "disc", "Disciplina", "H", "spell_holy_wordfortitude"],
+    ["PRIEST", "holy", "Sacro", "H", "spell_holy_holybolt"],
+    ["PRIEST", "shadow", "Ombra", "R", "spell_shadow_shadowwordpain"],
+    ["ROGUE", "assa", "Assassinio", "M", "ability_rogue_eviscerate"],
+    ["ROGUE", "combat", "Combattimento", "M", "ability_backstab"],
+    ["ROGUE", "sub", "Scaltrezza", "M", "ability_stealth"],
+    ["SHAMAN", "ele", "Elementale", "R", "spell_nature_lightning"],
+    ["SHAMAN", "enh-dps", "Potenziamento (DPS)", "M", "spell_nature_lightningshield"],
+    ["SHAMAN", "enh-tank", "Potenziamento (tank)", "T", "spell_nature_lightningshield"],
+    ["SHAMAN", "resto", "Rigenerazione", "H", "spell_nature_magicimmunity"],
+    ["WARLOCK", "affli", "Afflizione", "R", "spell_shadow_deathcoil"],
+    ["WARLOCK", "demo", "Demonologia", "R", "spell_shadow_metamorphosis"],
+    ["WARLOCK", "destro", "Distruzione", "R", "spell_shadow_rainoffire"],
+    ["WARRIOR", "arms", "Armi", "M", "ability_warrior_savageblow"],
+    ["WARRIOR", "fury", "Furia", "M", "ability_warrior_innerrage"],
+    ["WARRIOR", "prot", "Protezione", "T", "ability_warrior_defensivestance"],
   ].map(([classe, id, nome, ruolo, icona]) => ({ chiave: classe + ":" + id, classe, id, nome, ruolo, icona }));
 
   // tipo: raid = tutto il raid; gruppo = solo il gruppo di 5; debuff = sul boss; utile = utilita'.
@@ -101,7 +101,7 @@ window.RAID = (function () {
     if (!s) return [];
     return BUFF.filter(b => b.da.includes(s.classe) || b.da.includes(chiave));
   };
-  const RUOLI = { T: "Tank", H: "Healer", M: "DPS melee", R: "DPS ranged" };
+  const RUOLI = { T: "Tank", H: "Healer", M: "DPS mischia", R: "DPS distanza" };
   const TIPI = { raid: "Buff per tutto il raid", gruppo: "Buff per il gruppo", debuff: "Debuff sul boss", utile: "Utilita'" };
   const RAID = [
     { id: "barrow", nome: "Barrow Deeps", taglia: 10 },

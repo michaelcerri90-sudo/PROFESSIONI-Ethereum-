@@ -41,7 +41,8 @@ label{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--mute
 input,select{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:4px;padding:8px 10px;width:100%;min-width:0}
 .lista{display:flex;flex-direction:column;gap:8px}
 .riga .r{grid-column:1 / -1}
-.riga{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto;gap:6px;align-items:end;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:10px}
+.orari{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.riga{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px;align-items:end;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:10px}
 .riga.nuova{border-color:var(--gold)}
 .riga label{font-size:12px}
 .riga input,.riga select{padding:6px 7px;font-size:15px}
@@ -65,6 +66,15 @@ input,select{font:inherit;color:var(--ink);background:var(--bg);border:1px solid
     <h2>Giorno</h2>
     <div class="mese"><button type="button" id="prev" aria-label="Mese prima">‹</button><b id="meseNome"></b><button type="button" id="next" aria-label="Mese dopo">›</button></div>
     <div class="cal" id="cal"></div>
+  </section>
+
+  <section class="box">
+    <h2>Orari della serata (ora italiana)</h2>
+    <div class="orari">
+      <label>Ritrovo<input type="time" id="ritrovo"></label>
+      <label>Inizio<input type="time" id="ora"></label>
+      <label>Fine<input type="time" id="fine"></label>
+    </div>
   </section>
 
   <section class="box">
@@ -93,7 +103,7 @@ const iso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")
 const oraIt = ts => new Date(ts * 1000).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Rome" });
 const giornoIt = ts => new Date(ts * 1000).toLocaleDateString("sv-SE", { timeZone: "Europe/Rome" });
 let EV = null, giorno = null, giornoPrima = null, mese = new Date(oggi.getFullYear(), oggi.getMonth(), 1);
-let righe = []; // { k (vuoto se nuova), raid, ora, ritrovo }
+let righe = []; // { k (vuoto se nuova), raid } - gli orari sono quelli della serata
 const iscrittiA = k => new Set(Object.values(EV.unita || {}).filter(x => x.raids.includes(k)).map(x => x.u)).size;
 
 function disegnaCal() {
@@ -112,11 +122,9 @@ function disegnaLista() {
   $("lista").innerHTML = righe.map((r, n) => {
     const quanti = r.k ? iscrittiA(r.k) : 0;
     return `<div class="riga ${r.k ? "" : "nuova"}" data-n="${n}">
-      <label class="r">Raid<select data-f="raid">${R.RAID.map(x => `<option value="${x.id}" ${x.id === r.raid ? "selected" : ""}>${esc(x.nome)}</option>`).join("")}</select></label>
-      <label>Inizio<input type="time" data-f="ora" value="${r.ora}"></label>
-      <label>Ritrovo<input type="time" data-f="ritrovo" value="${r.ritrovo}"></label>
+      <label>Raid<select data-f="raid">${R.RAID.map(x => `<option value="${x.id}" ${x.id === r.raid ? "selected" : ""}>${esc(x.nome)}</option>`).join("")}</select></label>
       <button type="button" class="via" data-via="${n}" ${righe.length < 2 ? "disabled title=\"Serve almeno un raid\"" : ""} aria-label="Togli">✕</button>
-      <span class="info">${r.k ? `${quanti} iscritti: restano anche se cambi raid o orario` : "Nuovo: chi era segnato a tutti i raid del giorno viene segnato anche qui"}</span>
+      <span class="info">${r.k ? `${quanti} iscritti: restano anche se cambi raid, giorno o orari` : "Nuovo: chi era segnato a tutti i raid del giorno viene segnato anche qui"}</span>
     </div>`;
   }).join("");
   $("aggiungi").innerHTML = R.RAID.map(x => `<button type="button" data-add="${x.id}">+ ${esc(x.nome)}</button>`).join(" ");
@@ -125,7 +133,7 @@ function tutto() { disegnaCal(); disegnaLista(); }
 
 document.addEventListener("click", e => {
   const g = e.target.closest("[data-g]"); if (g && !g.disabled) { giorno = g.dataset.g; disegnaCal(); return; }
-  const a = e.target.closest("[data-add]"); if (a) { righe.push({ k: "", raid: a.dataset.add, ora: "21:30", ritrovo: "21:00" }); disegnaLista(); return; }
+  const a = e.target.closest("[data-add]"); if (a) { righe.push({ k: "", raid: a.dataset.add }); disegnaLista(); return; }
   const v = e.target.closest("[data-via]");
   if (v && !v.disabled) {
     const r = righe[+v.dataset.via], quanti = r.k ? iscrittiA(r.k) : 0;
@@ -145,7 +153,7 @@ $("salva").onclick = async () => {
   $("salva").disabled = true; esito("Salvo...", true);
   try {
     const res = await fetch(R.RELAY + "/raid/modifica", { method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ t: token, id: evId, data: giorno, note: $("note").value, raids: righe.map(r => ({ k: r.k || undefined, raid: r.raid, ora: r.ora, ritrovo: r.ritrovo })) }) });
+      body: JSON.stringify({ t: token, id: evId, data: giorno, ora: $("ora").value || "21:30", ritrovo: $("ritrovo").value, fine: $("fine").value, note: $("note").value, raids: righe.map(r => ({ k: r.k || undefined, raid: r.raid })) }) });
     const d = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(d.errore || res.status);
     esito(`Salvato! Il messaggio del raid e' aggiornato e nel canale c'e' un avviso per chi e' gia' segnato. <a href="${esc(d.link)}">Apri su Discord</a>`, true);
@@ -162,7 +170,8 @@ async function carica() {
   giorno = giornoPrima = d.data || giornoIt(d.ts);
   const [y, m] = giorno.split("-").map(Number);
   mese = new Date(y, m - 1, 1);
-  righe = d.raids.map(x => ({ k: x.k, raid: x.raid, ora: oraIt(x.ts), ritrovo: x.ritrovo ? oraIt(x.ritrovo) : "" }));
+  righe = d.raids.map(x => ({ k: x.k, raid: x.raid }));
+  $("ora").value = oraIt(d.ts); $("ritrovo").value = d.ritrovo ? oraIt(d.ritrovo) : ""; $("fine").value = d.fine ? oraIt(d.fine) : "";
   $("note").value = d.note || "";
   $("titolo").textContent = d.raidNome;
   const n = new Set(Object.values(d.unita || {}).map(x => x.u)).size;

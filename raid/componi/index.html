@@ -41,6 +41,8 @@ p{margin:0}
 .chip.sel{outline:2px solid var(--gold)}
 .chip.messo{opacity:.4}
 .chip.fuori{border-style:dashed;border-left-style:solid;background:repeating-linear-gradient(135deg,var(--bg) 0 6px,#1a1210 6px 12px)}
+.raid header .ref{flex-direction:row;align-items:center;gap:6px;font-size:13px}
+.raid header .ref input{width:150px;padding:4px 6px;font-size:13px}
 .perraid{font:inherit;font-size:13px;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:4px;padding:4px 6px}
 .chip .n{font-weight:700;color:var(--c);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .chip .s{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0}
@@ -114,8 +116,7 @@ textarea{min-height:120px;resize:vertical}
   <form method="dialog" id="frm">
     <h2>Pubblica i gruppi</h2>
     <p class="muted">Il bot scrive i gruppi nel canale del raid e manda un messaggio privato a ogni convocato e a chi e' in panchina.</p>
-    <label>Ora di ritrovo<input type="text" id="ritrovo" maxlength="80" placeholder="es. 20:15 all'ingresso di Hyjal"></label>
-    <label>Referente del raid<input type="text" id="referente" maxlength="60" placeholder="es. Cornelius (karithan)"></label>
+    <label>Luogo di ritrovo (facoltativo)<input type="text" id="ritrovo" maxlength="80" placeholder="es. all'ingresso di Hyjal"></label>
     <label>Consumabili<textarea id="consumabili" maxlength="800"></textarea></label>
     <div class="barra"><button class="btn" type="submit" value="ok">Pubblica e avvisa</button><button class="btn min" type="submit" value="annulla" formnovalidate>Annulla</button></div>
   </form>
@@ -182,7 +183,7 @@ function chip(u, opzioni = {}) {
   const fuori = opzioni.tab && opzioni.tab.k && !x.raids.includes(opzioni.tab.k);
   const doppia = x.alt ? `<span class="st" title="Si e' segnato anche come ${esc(infoSpec(x.alt).nome)}">${icona(infoSpec(x.alt).icona || "inv_misc_questionmark", "anche " + infoSpec(x.alt).nome)}</span>` : "";
   return `<div class="chip${sel && sel.u === u ? " sel" : ""}${dov.length ? " messo" : ""}${fuori ? " fuori" : ""}" style="--c:${colore(u)}" draggable="true" data-u="${esc(u)}" title="${esc((x.discord || "") + (fuori ? " · non si e' segnato a questo raid" : ""))}">
-    ${icona(sp.icona || "inv_misc_questionmark", sp.nome)}<span class="n">${esc(x.nome)}</span><span class="s">${esc(sp.nome)}</span>${doppia}
+    ${icona(sp.icona || "inv_misc_questionmark", sp.nome)}<span class="n">${esc(x.nome)}</span>${doppia}<span class="s"></span>
     ${solo ? `<span class="st" title="Segnato solo a questi raid">solo ${esc(solo)}</span>` : ""}${stato ? `<span class="st">${stato}</span>` : ""}${posto ? `<span class="st">${posto}</span>` : ""}
     ${altra ? `<button class="sw" type="button" data-sw="${esc(u)}" title="Passa a ${esc(infoSpec(altra).nome)}">⇄</button>` : ""}
     <span class="b">${R.buffDi(k).filter(b => b.tipo !== "utile").slice(0, 5).map(b => icona(b.icona, b.nome)).join("")}</span></div>`;
@@ -220,9 +221,10 @@ function disegnaBoard() {
     membri.forEach(u => { const ru = infoSpec(specDi(u)).ruolo; ruoli[ru === "T" || ru === "H" ? ru : "D"]++; });
     const pres = buffPresenti(membri);
     const rd = raidDi(raid);
-    const titolo = rd ? `${esc(rd.raidNome)} · ${oraIt(rd.ts)}` : `Raid ${r + 1}`;
-    const scegli = multi ? `<select class="perraid" data-perraid="${r}" title="A quale raid del giorno corrisponde">${EV.raids.map(x => `<option value="${x.k}" ${x.k === raid.k ? "selected" : ""}>${esc(x.raidNome)} ${oraIt(x.ts)}</option>`).join("")}</select>` : "";
+    const titolo = rd ? esc(rd.raidNome) : `Raid ${r + 1}`;
+    const scegli = multi ? `<select class="perraid" data-perraid="${r}" title="A quale raid del giorno corrisponde">${EV.raids.map(x => `<option value="${x.k}" ${x.k === raid.k ? "selected" : ""}>${esc(x.raidNome)} (${x.taglia})</option>`).join("")}</select>` : "";
     html += `<div class="raid"><header><h2>${titolo} <span class="muted">(${raid.taglia})</span></h2>${scegli}
+      <label class="ref">Referente<input type="text" data-ref="${r}" maxlength="40" value="${esc(raid.ref || "")}" placeholder="chi guida questo raid"></label>
       <div class="conta"><span>Tank <b>${ruoli.T}</b></span><span>Healer <b>${ruoli.H}</b></span><span>DPS <b>${ruoli.D}</b></span><span>Totale <b>${membri.length}/${raid.taglia}</b></span></div>
       <span><button class="btn min" type="button" data-addon="${r}" title="Riga da incollare nell'addon RaidEthereum in gioco">Per l'addon</button> <button class="btn min" type="button" data-delraid="${r}">Togli raid</button></span></header><div class="gruppi">`;
     raid.gruppi.forEach((g, gi) => {
@@ -258,9 +260,11 @@ function origine(el) {
 document.addEventListener("change", e => {
   const pr = e.target.closest("[data-perraid]");
   if (pr) { comp.raids[+pr.dataset.perraid].k = pr.value; modificato(); }
+  const rf = e.target.closest("[data-ref]");
+  if (rf) { comp.raids[+rf.dataset.ref].ref = rf.value.replace(/[|;,@<>`]/g, "").trim(); sporco = true; }
 });
 document.addEventListener("click", e => {
-  if (e.target.closest("select")) return;
+  if (e.target.closest("select, input")) return;
   const sw = e.target.closest("[data-sw]");
   if (sw) { const u = sw.dataset.sw; comp.spec[u] = altraDi(u); if (comp.spec[u] === iscritto(u).spec) delete comp.spec[u]; modificato(); return; }
   const xb = e.target.closest("[data-x]");
@@ -316,7 +320,7 @@ $("dlg").addEventListener("close", async () => {
   if ($("dlg").returnValue !== "ok") return;
   try {
     esito("Pubblicazione in corso...", true);
-    const d = await chiama("/raid/pubblica", { comp, ritrovo: $("ritrovo").value, referente: $("referente").value, consumabili: $("consumabili").value });
+    const d = await chiama("/raid/pubblica", { comp, ritrovo: $("ritrovo").value, consumabili: $("consumabili").value });
     sporco = false;
     const lista = d.utenti || [];
     let fatti = 0, errori = 0;
@@ -333,7 +337,7 @@ function mostraAddon(r) {
   const raid = comp.raids[r], rd = raidDi(raid) || EV.raids[0];
   const nomi = l => l.filter(Boolean).map(u => iscritto(u).nome.replace(/[|;,]/g, "")).join(",");
   const ritrovo = rd.ritrovo || rd.ts - 1800;
-  const ref = ($("referente").value || "").replace(/[|;,]/g, "").trim();
+  const ref = (raid.ref || "").replace(/[|;,]/g, "").trim();
   const stessi = comp.raids.filter(t => (raidDi(t) || EV.raids[0]).k === rd.k).length > 1;
   const riga = ["RE1", `${EV.id}-${r + 1}`, `${rd.raidNome}${stessi ? " " + (r + 1) : ""}`, rd.ts, ritrovo, ref,
     raid.gruppi.map(nomi).join(";"), nomi(comp.panchina)].join("|");
@@ -351,14 +355,14 @@ window.addEventListener("beforeunload", e => { if (sporco) { e.preventDefault();
     if (!r.ok) throw new Error(d.errore || r.status);
     EV = d; EV.unita = EV.unita || {}; EV.raids = EV.raids || [];
     $("titolo").textContent = EV.raids.length > 1 ? d.raidNome : `${d.raidNome} · ${d.taglia}`;
-    const quando = new Date(d.ts * 1000).toLocaleString("it-IT", { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" });
+    const giorno = new Date(d.ts * 1000).toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long", timeZone: "Europe/Rome" });
+    const quando = [giorno.charAt(0).toUpperCase() + giorno.slice(1), d.ritrovo ? "ritrovo " + oraIt(d.ritrovo) : "", "inizio " + oraIt(d.ts), d.fine ? "fine " + oraIt(d.fine) : ""].filter(Boolean).join(" · ");
     const n = new Set(Object.values(EV.unita).map(x => x.u)).size;
     $("sotto").textContent = `${quando} · ${n} iscritti` + (EV.raids.length > 1 ? ` · ${EV.raids.length} raid nello stesso giorno: dividi tu i giocatori tra le tabelle` : "") + (d.bozzaDi ? ` · bozza salvata da ${d.bozzaDi}` : "") + (d.pubblicato ? " · gruppi gia' pubblicati" : "");
     if (d.bozza) comp = { raids: d.bozza.raids || [], panchina: d.bozza.panchina || [], spec: d.bozza.spec || {} };
     // una tabella per ogni raid del giorno che non ne ha ancora una
     for (const x of EV.raids) if (!comp.raids.some(t => t.k === x.k)) comp.raids.push(tabella(x.taglia, x.k));
-    if (d.pubblicato) { $("ritrovo").value = d.pubblicato.ritrovo || ""; $("referente").value = d.pubblicato.referente || ""; $("consumabili").value = d.pubblicato.consumabili || ""; }
-    else if (d.ritrovo) $("ritrovo").value = new Date(d.ritrovo * 1000).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Rome" });
+    if (d.pubblicato) { $("ritrovo").value = d.pubblicato.ritrovo || ""; $("consumabili").value = d.pubblicato.consumabili || ""; }
     disegna();
   } catch (err) { $("titolo").textContent = "Non riesco ad aprire il raid"; $("sotto").textContent = err.message; }
 })();

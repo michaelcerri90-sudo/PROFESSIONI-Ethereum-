@@ -42,13 +42,13 @@ p{margin:0}
 .cal button.oggi{border-color:var(--muted)}
 .cal button.pieno{border-color:var(--gold);background:var(--gold-soft)}
 .cal .tag{font-size:10px;line-height:1;font-weight:700;color:#1a1400;background:var(--gold);border-radius:3px;padding:2px 3px}
-.orari{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.orari{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
 label{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted)}
 input,select{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:4px;padding:8px 10px;width:100%;min-width:0}
 .lista{display:flex;flex-direction:column;gap:8px}
 .riga{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:10px}
 .riga .quando{font-weight:700;text-transform:capitalize}
-.riga .campi{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr) minmax(0,1fr);gap:6px;grid-column:1 / -1}
+.riga .campi{display:grid;grid-template-columns:minmax(0,1fr);gap:6px;grid-column:1 / -1}
 .riga .campi label{font-size:12px}
 .riga .campi input,.riga .campi select{padding:6px 7px;font-size:15px}
 .riga .via{background:transparent;border:1px solid var(--line);color:var(--bad);border-radius:4px;padding:4px 10px;cursor:pointer;font:inherit}
@@ -80,10 +80,11 @@ input,select{font:inherit;color:var(--ink);background:var(--bg);border:1px solid
   </section>
 
   <section class="box">
-    <h2>3 · Orari (ora italiana)</h2>
+    <h2>3 · Orari della serata (ora italiana)</h2>
     <div class="orari">
-      <label>Inizio<input type="time" id="ora" value="21:30"></label>
       <label>Ritrovo<input type="time" id="ritrovo" value="21:00"></label>
+      <label>Inizio<input type="time" id="ora" value="21:30"></label>
+      <label>Fine<input type="time" id="fine" value="00:00"></label>
     </div>
     <label style="margin-top:10px">Note per tutti (facoltative)<input type="text" id="note" maxlength="300" placeholder="es. portate le resistenze al fuoco"></label>
   </section>
@@ -108,7 +109,7 @@ const iso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")
 const sigla = id => R.RAID.find(r => r.id === id).nome.split(/\s+/).map(w => w[0]).join("").toUpperCase();
 const nomeRaid = id => R.RAID.find(r => r.id === id).nome;
 let scelto = "hyjal", mese = new Date(oggi.getFullYear(), oggi.getMonth(), 1), inCorso = false;
-let voci = []; // { k, raid, data, ora, ritrovo, stato: ""|"ok"|"bad", msg }
+let voci = []; // { k, raid, data, stato: ""|"ok"|"bad", msg } - gli orari sono quelli della serata, uguali per tutti
 
 function disegnaRaid() {
   $("raid").innerHTML = R.RAID.map(r => `<button type="button" data-raid="${r.id}" aria-pressed="${scelto === r.id}"><b>${esc(r.nome)}</b><span>${r.taglia} giocatori</span></button>`).join("");
@@ -128,7 +129,7 @@ function disegnaCal() {
   $("cal").innerHTML = html;
 }
 function disegnaLista() {
-  voci.sort((a, b) => (a.data + a.ora).localeCompare(b.data + b.ora));
+  voci.sort((a, b) => a.data.localeCompare(b.data));
   $("lista").innerHTML = voci.length ? voci.map(v => {
     const quando = new Date(v.data + "T12:00").toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long" });
     const chiusa = v.stato === "ok" || inCorso;
@@ -137,8 +138,6 @@ function disegnaLista() {
       ${v.stato === "ok" ? "<span>✓</span>" : `<button type="button" class="via" data-via="${v.k}" ${inCorso ? "disabled" : ""} aria-label="Togli">✕</button>`}
       <div class="campi">
         <label>Raid<select data-f="raid" ${chiusa ? "disabled" : ""}>${R.RAID.map(r => `<option value="${r.id}" ${r.id === v.raid ? "selected" : ""}>${esc(r.nome)}</option>`).join("")}</select></label>
-        <label>Inizio<input type="time" data-f="ora" value="${v.ora}" ${chiusa ? "disabled" : ""}></label>
-        <label>Ritrovo<input type="time" data-f="ritrovo" value="${v.ritrovo}" ${chiusa ? "disabled" : ""}></label>
       </div>
       ${v.msg ? `<div class="stato">${v.msg}</div>` : ""}
     </div>`;
@@ -156,7 +155,7 @@ document.addEventListener("click", e => {
   if (g && !g.disabled && !inCorso) {
     const k = g.dataset.g, gia = voci.find(v => v.data === k && v.raid === scelto && v.stato !== "ok");
     if (gia) voci = voci.filter(v => v !== gia);
-    else voci.push({ k: Math.random().toString(36).slice(2, 8), raid: scelto, data: k, ora: $("ora").value || "21:30", ritrovo: $("ritrovo").value || "", stato: "", msg: "" });
+    else voci.push({ k: Math.random().toString(36).slice(2, 8), raid: scelto, data: k, stato: "", msg: "" });
     disegnaCal(); disegnaLista(); return;
   }
   const x = e.target.closest("[data-via]");
@@ -168,8 +167,6 @@ document.addEventListener("change", e => {
   v[f] = e.target.value;
   if (f === "raid") disegnaCal();
 });
-// cambiare gli orari in alto aggiorna anche i raid gia' in elenco non ancora creati
-["ora", "ritrovo"].forEach(id => $(id).addEventListener("change", () => { voci.forEach(v => { if (v.stato !== "ok") v[id] = $(id).value; }); disegnaLista(); }));
 $("prev").onclick = () => { mese = new Date(mese.getFullYear(), mese.getMonth() - 1, 1); disegnaCal(); };
 $("next").onclick = () => { mese = new Date(mese.getFullYear(), mese.getMonth() + 1, 1); disegnaCal(); };
 
@@ -185,7 +182,7 @@ $("crea").onclick = async () => {
     disegnaLista();
     try {
       const res = await fetch(R.RELAY + "/raid/nuovo", { method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ t: token, c: cid, data: giorno, note: $("note").value, raids: quelli.map(v => ({ raid: v.raid, ora: v.ora, ritrovo: v.ritrovo })) }) });
+        body: JSON.stringify({ t: token, c: cid, data: giorno, ora: $("ora").value || "21:30", ritrovo: $("ritrovo").value, fine: $("fine").value, note: $("note").value, raids: quelli.map(v => ({ raid: v.raid })) }) });
       const d = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(d.errore || res.status);
       const testo = `${d.canale ? `Canale <b>#${esc(d.canale)}</b> creato. ` : d.aggiunto ? "Aggiunto al canale gia' aperto per questo giorno. " : ""}<a href="${esc(d.link)}">Apri su Discord</a>${d.avviso ? `<br>${esc(d.avviso)}` : ""}`;
