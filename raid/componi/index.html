@@ -46,7 +46,15 @@ p{margin:0}
 .chip .r2 .ic{width:15px;height:15px}
 .chip .tag{display:flex;gap:4px;margin-left:auto;flex:none}
 .chip .ic.attiva{outline:1px solid var(--gold);outline-offset:1px}
-.chip .posto{color:var(--muted)}
+.chip .segno{flex:none;width:16px;height:16px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;line-height:1}
+.chip .segno.ok{background:var(--ok);color:#06200a}
+.chip .segno.meta{color:#f0c040;font-size:15px}
+.refsel{position:relative;font-size:13px}
+.refsel summary{cursor:pointer;list-style:none;padding:4px 8px;border:1px solid var(--line);border-radius:4px;background:var(--bg);max-width:260px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.refsel summary::after{content:" ▾";color:var(--muted)}
+.refsel .menu{position:absolute;z-index:5;top:calc(100% + 4px);left:0;background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:6px;min-width:220px;max-height:280px;overflow:auto;box-shadow:0 8px 20px rgba(0,0,0,.5)}
+.refsel .menu label{flex-direction:row;align-items:center;gap:6px;color:var(--ink);font-size:14px;padding:3px 2px;cursor:pointer}
+.refsel .menu small{color:var(--muted)}
 .chip.fuori{border-style:dashed;border-left-style:solid;background:repeating-linear-gradient(135deg,var(--bg) 0 6px,#1a1210 6px 12px)}
 .raid header .ref{flex-direction:row;align-items:center;gap:6px;font-size:13px}
 .raid header .ref input{width:190px;padding:4px 6px;font-size:13px}
@@ -104,7 +112,7 @@ textarea{min-height:120px;resize:vertical}
     <button class="btn" type="button" id="pubblica">Pubblica gruppi</button>
   </div>
   <div id="esito" class="esito" hidden></div>
-  <p class="muted">Clicca un giocatore e poi un posto vuoto (oppure trascinalo). Clicca un giocatore gia' messo per spostarlo; la x lo rimette tra gli iscritti. Accanto al nome: spec principale e seconda spec (quella in uso ha il bordo), sotto i buff che porta; chi e' gia' in un raid diventa grigio. Il tasto ⇄ passa all'altra spec. Chi fa piu' raid nello stesso giorno puo' stare in piu' tabelle; a strisce = non si e' segnato a quel raid.</p>
+  <p class="muted">Clicca un giocatore e poi un posto vuoto (oppure trascinalo). Clicca un giocatore gia' messo per spostarlo; la x lo rimette tra gli iscritti. Accanto al nome: spec principale e seconda spec (quella in uso ha il bordo), sotto i buff che porta. Il tasto ⇄ passa all'altra spec. Chi fa piu' raid nello stesso giorno puo' stare in piu' tabelle (anche in panchina in uno e titolare nell'altro): ✔ verde = messo in tutti i suoi raid, ● giallo = solo in alcuni. A strisce = non si e' segnato a quel raid.</p>
   <div class="main">
     <aside class="pool" id="pool"></aside>
     <section class="board" id="board"></section>
@@ -140,6 +148,7 @@ const token = hash.get("t") || "", evId = hash.get("e") || "";
 // EV.unita: una voce per giocatore+personaggio ({ u, nome, classe, spec, alt, off, stato, raids:[k] }).
 // Chi fa due raid dello stesso giorno con lo stesso personaggio puo' stare in tutte e due le tabelle (una volta per tabella).
 let EV = null, comp = { raids: [], panchina: [], spec: {} }, sel = null, sporco = false;
+let REFERENTI = []; // personaggi di chi ha il ruolo dei referenti su Discord
 
 const iscritto = u => EV.unita[u];
 const specDi = u => comp.spec[u] || iscritto(u).spec;
@@ -152,18 +161,17 @@ const sigla = r => r.raidNome.split(/\s+/).map(w => w[0]).join("").toUpperCase()
 const oraIt = ts => new Date(ts * 1000).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Rome" });
 // "Cornelius, Karithan" / "Cornelius Karithan" -> ["Cornelius", "Karithan"] (nomi dei personaggi in gioco)
 const referenti = t => [...new Set(String(t || "").split(/[\s,;\/+|]+/).map(x => x.replace(/[^\p{L}\p{M}'-]/gu, "")).filter(Boolean))].slice(0, 6);
-const tabella = (taglia, k) => ({ k: k || null, taglia, gruppi: Array.from({ length: taglia / 5 }, () => Array(5).fill(null)) });
+const tabella = (taglia, k) => ({ k: k || null, taglia, gruppi: Array.from({ length: taglia / 5 }, () => Array(5).fill(null)), panca: [] });
 
 function posti(u) {
   const l = [];
   comp.raids.forEach((t, r) => t.gruppi.forEach((g, gi) => { const s = g.indexOf(u); if (s >= 0) l.push({ r, g: gi, s }); }));
-  const p = comp.panchina.indexOf(u);
-  if (p >= 0) l.push({ panca: p });
+  comp.raids.forEach((t, r) => { const p = (t.panca || []).indexOf(u); if (p >= 0) l.push({ r, panca: p }); });
   return l;
 }
 function togliDa(u, d) {
   if (!d) return;
-  if (d.panca != null) { const p = comp.panchina.indexOf(u); if (p >= 0) comp.panchina.splice(p, 1); }
+  if (d.panca != null) { const t = comp.raids[d.r]; const p = t ? (t.panca || []).indexOf(u) : -1; if (p >= 0) t.panca.splice(p, 1); }
   else if (comp.raids[d.r] && comp.raids[d.r].gruppi[d.g][d.s] === u) comp.raids[d.r].gruppi[d.g][d.s] = null;
 }
 function togliTutto(u) { posti(u).forEach(d => togliDa(u, d)); }
@@ -173,14 +181,22 @@ function metti(u, da, r, g, s) {
   if (da) togliDa(u, da);
   // nella stessa tabella al massimo una volta
   comp.raids[r].gruppi.forEach((gr, gi) => gr.forEach((x, si) => { if (x === u) comp.raids[r].gruppi[gi][si] = null; }));
+  comp.raids[r].panca = (comp.raids[r].panca || []).filter(x => x !== u);
   if (occupante && occupante !== u) { // scambio: chi c'era va al posto da cui arrivava l'altro
     if (da && da.panca == null && comp.raids[da.r].gruppi[da.g][da.s] == null && !comp.raids[da.r].gruppi.flat().includes(occupante)) comp.raids[da.r].gruppi[da.g][da.s] = occupante;
-    else if (da && da.panca != null) comp.panchina.push(occupante);
+    else if (da && da.panca != null && !comp.raids[da.r].panca.includes(occupante)) comp.raids[da.r].panca.push(occupante);
   }
   comp.raids[r].gruppi[g][s] = u;
   modificato();
 }
-function inPanchina(u, da) { if (da) togliDa(u, da); if (!comp.panchina.includes(u)) comp.panchina.push(u); modificato(); }
+function inPanchina(u, da, r) {
+  if (da) togliDa(u, da);
+  const t = comp.raids[r];
+  t.gruppi.forEach((gr, gi) => gr.forEach((x, si) => { if (x === u) t.gruppi[gi][si] = null; })); // in un raid: o in un gruppo o in panchina
+  t.panca = t.panca || [];
+  if (!t.panca.includes(u)) t.panca.push(u);
+  modificato();
+}
 function modificato() { sporco = true; sel = null; disegna(); }
 
 // Iscritti (opzioni.pool): riga 1 nome, spec principale, seconda spec, stato; riga 2 tutti i buff che porta.
@@ -196,14 +212,18 @@ function chip(u, opzioni = {}) {
       <span class="n">${esc(x.nome)}</span>${ic(k)}${toggle}</div>`;
   }
   const dov = posti(u);
-  const posto = dov.map(d => d.panca != null ? "panca" : `R${d.r + 1}`).join(" ");
+  const tabMie = comp.raids.map((t, r) => r).filter(r => !comp.raids[r].k || x.raids.includes(comp.raids[r].k));
+  const dentro = new Set(dov.map(d => d.r)).size;
+  const serve = Math.max(1, tabMie.length);
+  const dove = dov.map(d => `${raidDi(comp.raids[d.r]) ? raidDi(comp.raids[d.r]).raidNome : "Raid " + (d.r + 1)}${d.panca != null ? " (panchina)" : ""}`).join(", ");
+  const segno = !dentro ? "" : dentro >= serve ? `<span class="segno ok" title="In tutti i suoi raid: ${esc(dove)}">✔</span>` : `<span class="segno meta" title="Solo in: ${esc(dove)}">●</span>`;
   const stato = x.stato === "ritardo" ? "⏰" : x.stato === "forse" ? "forse" : "";
   const multi = (EV.raids || []).length > 1;
   const solo = multi && x.raids.length < EV.raids.length ? EV.raids.filter(r => x.raids.includes(r.k)).map(sigla).join("+") : "";
-  const tag = [solo ? `<span class="st" title="Segnato solo a questi raid">solo ${esc(solo)}</span>` : "", stato ? `<span class="st">${stato}</span>` : "", posto ? `<span class="st posto">${posto}</span>` : ""].join("");
+  const tag = [solo ? `<span class="st" title="Segnato solo a questi raid">solo ${esc(solo)}</span>` : "", stato ? `<span class="st">${stato}</span>` : ""].join("");
   const buff = R.buffDi(k).map(b => icona(b.icona, b.nome + (b.tipo === "gruppo" ? " (gruppo)" : ""))).join("");
-  return `<div class="${classi} pool${dov.length ? " messo" : ""}" style="--c:${colore(u)}" draggable="true" data-u="${esc(u)}" title="${esc(x.discord || "")}">
-    <div class="r1"><span class="n">${esc(x.nome)}</span>${ic(x.spec, k === x.spec ? " attiva" : "")}${x.alt ? ic(x.alt, k === x.alt ? " attiva" : "") : ""}<span class="tag">${tag}</span>${toggle}</div>
+  return `<div class="${classi} pool" style="--c:${colore(u)}" draggable="true" data-u="${esc(u)}" title="${esc(x.discord || "")}">
+    <div class="r1">${segno}<span class="n">${esc(x.nome)}</span>${ic(x.spec, k === x.spec ? " attiva" : "")}${x.alt ? ic(x.alt, k === x.alt ? " attiva" : "") : ""}<span class="tag">${tag}</span>${toggle}</div>
     ${buff ? `<div class="r2">${buff}</div>` : ""}</div>`;
 }
 
@@ -230,6 +250,15 @@ function buffPresenti(membri) {
 }
 const buffIcona = (b, chi, extra = "") => `<span class="bi${chi ? "" : " no"}" title="${esc(b.nome + (b.nota ? " (" + b.nota + ")" : "") + (chi ? ": " + chi.join(", ") : ": nessuno"))}"><img src="${R.ICO(b.icona)}" alt="${esc(b.nome)}" loading="lazy">${extra}</span>`;
 
+// referenti: tendina con i personaggi di chi ha il ruolo su Discord (solo loro useranno inviti e auto-invito nell'addon)
+function sceltaReferenti(raid, r) {
+  const scelti = referenti(raid.ref);
+  if (!REFERENTI.length) return `<label class="ref" title="Solo loro potranno usare inviti di massa e auto-invito nell'addon">Referenti<input type="text" data-ref="${r}" maxlength="80" value="${esc(raid.ref || "")}" placeholder="es. Cornelius, Karithan"></label>`;
+  const voci = REFERENTI.map(p => `<label><input type="checkbox" data-refc="${r}" value="${esc(p.nome)}" ${scelti.some(n => n.toLowerCase() === p.nome.toLowerCase()) ? "checked" : ""}>
+    <img class="ic" src="${R.ICO(infoSpec(p.spec).icona || "inv_misc_questionmark")}" alt=""><span style="color:${(R.CLASSI[p.classe] || {}).colore || "inherit"}">${esc(p.nome)}</span> <small>${esc(p.discord)}</small></label>`).join("");
+  return `<details class="refsel" data-refsel="${r}" title="Solo loro potranno usare inviti di massa e auto-invito nell'addon"><summary>Referenti: ${esc(raid.ref || "nessuno")}</summary><div class="menu">${voci}</div></details>`;
+}
+
 function disegnaBoard() {
   let html = "";
   const multi = (EV.raids || []).length > 1;
@@ -242,7 +271,7 @@ function disegnaBoard() {
     const titolo = rd ? esc(rd.raidNome) : `Raid ${r + 1}`;
     const scegli = multi ? `<select class="perraid" data-perraid="${r}" title="A quale raid del giorno corrisponde">${EV.raids.map(x => `<option value="${x.k}" ${x.k === raid.k ? "selected" : ""}>${esc(x.raidNome)} (${x.taglia})</option>`).join("")}</select>` : "";
     html += `<div class="raid"><header><h2>${titolo} <span class="muted">(${raid.taglia})</span></h2>${scegli}
-      <label class="ref" title="Solo loro potranno usare inviti di massa e auto-invito nell'addon">Referenti<input type="text" data-ref="${r}" maxlength="80" value="${esc(raid.ref || "")}" placeholder="es. Cornelius, Karithan"></label>
+      ${sceltaReferenti(raid, r)}
       <div class="conta"><span>Tank <b>${ruoli.T}</b></span><span>Healer <b>${ruoli.H}</b></span><span>DPS <b>${ruoli.D}</b></span><span>Totale <b>${membri.length}/${raid.taglia}</b></span></div>
       <span><button class="btn min" type="button" data-addon="${r}" title="Riga da incollare nell'addon RaidEthereum in gioco">Per l'addon</button> <button class="btn min" type="button" data-delraid="${r}">Togli raid</button></span></header><div class="gruppi">`;
     raid.gruppi.forEach((g, gi) => {
@@ -260,10 +289,11 @@ function disegnaBoard() {
       const n = raid.gruppi.filter(g => buffPresenti(g.filter(Boolean)).has(b.id)).length;
       return buffIcona(b, n ? pres.get(b.id) : null, n ? `<em>${n}/${raid.gruppi.length}</em>` : "");
     });
-    html += `<div class="riga"><span class="l">${R.TIPI.gruppo} (gruppi coperti)</span>${grp.join("")}</div></div></div>`;
+    html += `<div class="riga"><span class="l">${R.TIPI.gruppo} (gruppi coperti)</span>${grp.join("")}</div></div>`;
+    const panca = raid.panca || [];
+    html += `<h3>Panchina di questo raid<span>${panca.length}</span></h3><div class="panca" data-panca="${r}">${panca.map((u, i) => `<div class="slot" data-pancaslot="${r},${i}">${chip(u, { tab: raid })}<button class="x" type="button" data-x="${esc(u)}" data-xp="${r}">×</button></div>`).join("") || `<p class="muted">Clicca un giocatore e poi qui per metterlo in panchina in questo raid.</p>`}</div></div>`;
   });
   if (!comp.raids.length) html += `<p class="muted">Aggiungi un raid da 10, 20 o 40 con i bottoni in alto.</p>`;
-  html += `<h3>Panchina<span>${comp.panchina.length}</span></h3><div class="panca" id="panca">${comp.panchina.map((u, i) => `<div class="slot" data-pancaslot="${i}">${chip(u)}<button class="x" type="button" data-x="${esc(u)}" data-xp="1">×</button></div>`).join("") || `<p class="muted">Clicca un giocatore e poi qui per metterlo in panchina.</p>`}</div>`;
   $("board").innerHTML = html;
 }
 function disegna() { disegnaPool(); disegnaBoard(); }
@@ -272,23 +302,31 @@ function disegna() { disegnaPool(); disegnaBoard(); }
 function origine(el) {
   const slot = el.closest("[data-slot]");
   if (slot) { const [r, g, s] = slot.dataset.slot.split(",").map(Number); return { r, g, s }; }
-  if (el.closest("[data-pancaslot]")) return { panca: 1 };
+  const ps = el.closest("[data-pancaslot]");
+  if (ps) return { r: +ps.dataset.pancaslot.split(",")[0], panca: 1 };
   return null;
 }
 document.addEventListener("change", e => {
   const pr = e.target.closest("[data-perraid]");
   if (pr) { comp.raids[+pr.dataset.perraid].k = pr.value; modificato(); }
+  const rc = e.target.closest("[data-refc]");
+  if (rc) {
+    const r = +rc.dataset.refc, box = rc.closest("[data-refsel]");
+    comp.raids[r].ref = [...box.querySelectorAll("input:checked")].map(i => i.value).join(", ");
+    box.querySelector("summary").textContent = "Referenti: " + (comp.raids[r].ref || "nessuno");
+    sporco = true; return;
+  }
   const rf = e.target.closest("[data-ref]");
   if (rf) { comp.raids[+rf.dataset.ref].ref = referenti(rf.value).join(", "); rf.value = comp.raids[+rf.dataset.ref].ref; sporco = true; }
 });
 document.addEventListener("click", e => {
-  if (e.target.closest("select, input")) return;
+  if (e.target.closest("select, input, .refsel")) return;
   const sw = e.target.closest("[data-sw]");
   if (sw) { const u = sw.dataset.sw; comp.spec[u] = altraDi(u); if (comp.spec[u] === iscritto(u).spec) delete comp.spec[u]; modificato(); return; }
   const xb = e.target.closest("[data-x]");
   if (xb) {
     const u = xb.dataset.x;
-    if (xb.dataset.xd) { const [r, g, s] = xb.dataset.xd.split(",").map(Number); togliDa(u, { r, g, s }); } else togliDa(u, { panca: 1 });
+    if (xb.dataset.xd) { const [r, g, s] = xb.dataset.xd.split(",").map(Number); togliDa(u, { r, g, s }); } else togliDa(u, { r: +xb.dataset.xp, panca: 1 });
     modificato(); return;
   }
   const add = e.target.closest("[data-add]");
@@ -301,20 +339,21 @@ document.addEventListener("click", e => {
   const c = e.target.closest(".chip");
   if (slot && slot.classList.contains("vuoto")) { if (sel) { const [r, g, s] = slot.dataset.slot.split(",").map(Number); metti(sel.u, sel.da, r, g, s); } return; }
   if (slot && c && sel && sel.u !== c.dataset.u) { const [r, g, s] = slot.dataset.slot.split(",").map(Number); metti(sel.u, sel.da, r, g, s); return; }
-  if (e.target.closest("#panca") && sel && !c) { inPanchina(sel.u, sel.da); return; }
+  const pz = e.target.closest("[data-panca]");
+  if (pz && sel && !c) { inPanchina(sel.u, sel.da, +pz.dataset.panca); return; }
   if (c) { sel = sel && sel.u === c.dataset.u ? null : { u: c.dataset.u, da: origine(c) }; disegna(); }
 });
 // trascina e lascia
 document.addEventListener("dragstart", e => { const c = e.target.closest(".chip"); if (c) { e.dataTransfer.setData("text/plain", c.dataset.u); sel = { u: c.dataset.u, da: origine(c) }; } });
-document.addEventListener("dragover", e => { const t = e.target.closest("[data-slot], #panca, #pool"); if (t) { e.preventDefault(); t.classList.add("over"); } });
-document.addEventListener("dragleave", e => { const t = e.target.closest("[data-slot], #panca"); if (t) t.classList.remove("over"); });
+document.addEventListener("dragover", e => { const t = e.target.closest("[data-slot], [data-panca], #pool"); if (t) { e.preventDefault(); t.classList.add("over"); } });
+document.addEventListener("dragleave", e => { const t = e.target.closest("[data-slot], [data-panca]"); if (t) t.classList.remove("over"); });
 document.addEventListener("drop", e => {
   const u = e.dataTransfer.getData("text/plain"); if (!u || !EV.unita[u]) return;
   e.preventDefault();
   const da = sel && sel.u === u ? sel.da : null;
   const slot = e.target.closest("[data-slot]");
   if (slot) { const [r, g, s] = slot.dataset.slot.split(",").map(Number); metti(u, da, r, g, s); }
-  else if (e.target.closest("#panca")) inPanchina(u, da);
+  else if (e.target.closest("[data-panca]")) inPanchina(u, da, +e.target.closest("[data-panca]").dataset.panca);
   else if (e.target.closest("#pool")) { if (da) togliDa(u, da); modificato(); }
 });
 
@@ -358,7 +397,7 @@ function mostraAddon(r) {
   const ref = referenti(raid.ref).join("+"); // nell'addon i referenti sono separati da +
   const stessi = comp.raids.filter(t => (raidDi(t) || EV.raids[0]).k === rd.k).length > 1;
   const riga = ["RE1", `${EV.id}-${r + 1}`, `${rd.raidNome}${stessi ? " " + (r + 1) : ""}`, rd.ts, ritrovo, ref,
-    raid.gruppi.map(nomi).join(";"), nomi(comp.panchina)].join("|");
+    raid.gruppi.map(nomi).join(";"), nomi(raid.panca || [])].join("|");
   $("addonTxt").value = riga;
   $("dlgAddon").showModal();
 }
@@ -377,7 +416,9 @@ window.addEventListener("beforeunload", e => { if (sporco) { e.preventDefault();
     const quando = [giorno.charAt(0).toUpperCase() + giorno.slice(1), d.ritrovo ? "ritrovo " + oraIt(d.ritrovo) : "", "inizio " + oraIt(d.ts), d.fine ? "fine " + oraIt(d.fine) : ""].filter(Boolean).join(" · ");
     const n = new Set(Object.values(EV.unita).map(x => x.u)).size;
     $("sotto").textContent = `${quando} · ${n} iscritti` + (EV.raids.length > 1 ? ` · ${EV.raids.length} raid nello stesso giorno: dividi tu i giocatori tra le tabelle` : "") + (d.bozzaDi ? ` · bozza salvata da ${d.bozzaDi}` : "") + (d.pubblicato ? " · gruppi gia' pubblicati" : "");
-    if (d.bozza) comp = { raids: d.bozza.raids || [], panchina: d.bozza.panchina || [], spec: d.bozza.spec || {} };
+    if (d.bozza) comp = { raids: (d.bozza.raids || []).map(t => ({ ...t, panca: t.panca || [] })), panchina: [], spec: d.bozza.spec || {} };
+    if (d.bozza && (d.bozza.panchina || []).length && comp.raids[0]) comp.raids[0].panca.push(...d.bozza.panchina.filter(u => !comp.raids[0].panca.includes(u)));
+    try { const rr = await fetch(`${R.RELAY}/raid/referenti?t=${encodeURIComponent(token)}&id=${encodeURIComponent(evId)}`); if (rr.ok) REFERENTI = (await rr.json()).referenti || []; } catch (e) {}
     // una tabella per ogni raid del giorno che non ne ha ancora una
     for (const x of EV.raids) if (!comp.raids.some(t => t.k === x.k)) comp.raids.push(tabella(x.taglia, x.k));
     if (d.pubblicato) { $("ritrovo").value = d.pubblicato.ritrovo || ""; $("consumabili").value = d.pubblicato.consumabili || ""; }
