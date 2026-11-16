@@ -7,7 +7,7 @@
 <meta name="robots" content="noindex">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alegreya+SC:wght@500;700&family=Alegreya+Sans:wght@400;500;700&display=swap">
 <style>
-/* Layout: tre passi in colonna (raid, giorno sul calendario, orari) e un riepilogo con il bottone Crea. */
+/* Layout: raid da aggiungere -> giorni sul calendario (ogni tocco aggiunge quel raid in quel giorno) -> orari predefiniti -> elenco dei raid da creare, ognuno modificabile, e un bottone Crea per tutti. */
 :root{
   color-scheme:dark;
   --bg:#0d1117; --panel:#151b24; --panel-2:#1c2430; --line:#2a3442; --ink:#e9e3d2; --muted:#9aa3ae;
@@ -24,6 +24,7 @@ h1{font-family:var(--font-display);font-size:clamp(28px,5vw,40px);margin:0;line-
 h1 small{display:block;font-family:var(--font-body);font-size:14px;font-weight:500;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;margin-bottom:6px}
 h2{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0 0 8px;font-weight:500}
 p{margin:0}
+.aiuto{color:var(--muted);font-size:14px;margin:-2px 0 10px}
 .box{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:14px}
 .raid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
 .raid button{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:12px 8px;color:var(--ink);font:inherit;cursor:pointer;display:flex;flex-direction:column;gap:2px;align-items:center;text-align:center}
@@ -33,51 +34,64 @@ p{margin:0}
 .mese{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
 .mese b{font-family:var(--font-display);font-size:20px;text-transform:capitalize}
 .mese button{background:var(--panel-2);border:1px solid var(--line);color:var(--ink);border-radius:4px;width:36px;height:32px;cursor:pointer;font-size:18px}
+.mese button:disabled{opacity:.3;cursor:default}
 .cal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px;text-align:center}
 .cal .dg{font-size:12px;color:var(--muted);padding:2px 0}
-.cal button{background:var(--bg);border:1px solid var(--line);border-radius:5px;color:var(--ink);font:inherit;padding:9px 0;cursor:pointer;font-variant-numeric:tabular-nums}
+.cal button{background:var(--bg);border:1px solid var(--line);border-radius:5px;color:var(--ink);font:inherit;padding:6px 0 4px;min-height:48px;cursor:pointer;font-variant-numeric:tabular-nums;display:flex;flex-direction:column;align-items:center;gap:2px}
 .cal button:disabled{opacity:.3;cursor:default}
 .cal button.oggi{border-color:var(--muted)}
-.cal button[aria-pressed="true"]{background:var(--gold);color:#1a1400;border-color:var(--gold);font-weight:700}
+.cal button.pieno{border-color:var(--gold);background:var(--gold-soft)}
+.cal .tag{font-size:10px;line-height:1;font-weight:700;color:#1a1400;background:var(--gold);border-radius:3px;padding:2px 3px}
 .orari{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
 label{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted)}
-input{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:4px;padding:8px 10px;width:100%}
-.riepilogo{border-color:var(--gold)}
-.riepilogo p{font-size:15px}
+input,select{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:4px;padding:8px 10px;width:100%;min-width:0}
+.lista{display:flex;flex-direction:column;gap:8px}
+.riga{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:10px}
+.riga .quando{font-weight:700;text-transform:capitalize}
+.riga .campi{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr) minmax(0,1fr);gap:6px;grid-column:1 / -1}
+.riga .campi label{font-size:12px}
+.riga .campi input,.riga .campi select{padding:6px 7px;font-size:15px}
+.riga .via{background:transparent;border:1px solid var(--line);color:var(--bad);border-radius:4px;padding:4px 10px;cursor:pointer;font:inherit}
+.riga.ok{border-color:var(--ok)} .riga.bad{border-color:var(--bad)}
+.riga .stato{grid-column:1 / -1;font-size:14px;overflow-wrap:anywhere}
+.riga.ok .stato{color:var(--ok)} .riga.bad .stato{color:var(--bad)}
+.riga .stato a{color:var(--gold)}
+.vuota{color:var(--muted);font-size:15px}
 .btn{background:var(--gold);color:#1a1400;border:0;border-radius:4px;padding:12px 18px;font:inherit;font-weight:700;cursor:pointer;width:100%;margin-top:10px}
 .btn:disabled{opacity:.5;cursor:default}
 .esito{padding:10px 12px;border-radius:4px;border:1px solid var(--line);background:var(--panel);overflow-wrap:anywhere}
 .esito.ok{border-color:var(--ok)} .esito.bad{border-color:var(--bad);color:var(--bad)}
-.esito a{color:var(--gold)}
 :focus-visible{outline:2px solid var(--gold);outline-offset:2px}
 </style>
 
 <div class="wrap">
-  <h1><small>Raid Ethereum</small>Nuovo raid</h1>
+  <h1><small>Raid Ethereum</small>Nuovi raid</h1>
 
   <section class="box">
-    <h2>Raid</h2>
+    <h2>1 · Raid</h2>
     <div class="raid" id="raid"></div>
   </section>
 
   <section class="box">
-    <h2>Giorno</h2>
+    <h2>2 · Giorni</h2>
+    <p class="aiuto">Tocca un giorno per aggiungere il raid scelto sopra. Puoi cambiare raid e toccare altri giorni: li crei tutti insieme. Tocca di nuovo per toglierlo.</p>
     <div class="mese"><button type="button" id="prev" aria-label="Mese prima">‹</button><b id="meseNome"></b><button type="button" id="next" aria-label="Mese dopo">›</button></div>
     <div class="cal" id="cal"></div>
   </section>
 
   <section class="box">
-    <h2>Orari (ora italiana)</h2>
+    <h2>3 · Orari (ora italiana)</h2>
     <div class="orari">
       <label>Inizio<input type="time" id="ora" value="21:30"></label>
       <label>Ritrovo<input type="time" id="ritrovo" value="21:00"></label>
     </div>
-    <label style="margin-top:10px">Note (facoltative)<input type="text" id="note" maxlength="300" placeholder="es. portate le resistenze al fuoco"></label>
+    <label style="margin-top:10px">Note per tutti (facoltative)<input type="text" id="note" maxlength="300" placeholder="es. portate le resistenze al fuoco"></label>
   </section>
 
-  <section class="box riepilogo">
-    <p id="riepilogo"></p>
-    <button class="btn" type="button" id="crea">Crea raid e canale</button>
+  <section class="box" style="border-color:var(--gold)">
+    <h2>Raid da creare</h2>
+    <div class="lista" id="lista"></div>
+    <button class="btn" type="button" id="crea"></button>
   </section>
   <div id="esito" class="esito" hidden></div>
 </div>
@@ -90,11 +104,14 @@ const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;
 const h = new URLSearchParams(location.hash.slice(1));
 const token = h.get("t") || "", cid = h.get("c") || "";
 const oggi = new Date(); oggi.setHours(0, 0, 0, 0);
-let scelta = { raid: "hyjal", giorno: null }, mese = new Date(oggi.getFullYear(), oggi.getMonth(), 1);
 const iso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+const sigla = id => R.RAID.find(r => r.id === id).nome.split(/\s+/).map(w => w[0]).join("").toUpperCase();
+const nomeRaid = id => R.RAID.find(r => r.id === id).nome;
+let scelto = "hyjal", mese = new Date(oggi.getFullYear(), oggi.getMonth(), 1), inCorso = false;
+let voci = []; // { k, raid, data, ora, ritrovo, stato: ""|"ok"|"bad", msg }
 
 function disegnaRaid() {
-  $("raid").innerHTML = R.RAID.map(r => `<button type="button" data-raid="${r.id}" aria-pressed="${scelta.raid === r.id}"><b>${esc(r.nome)}</b><span>${r.taglia} giocatori</span></button>`).join("");
+  $("raid").innerHTML = R.RAID.map(r => `<button type="button" data-raid="${r.id}" aria-pressed="${scelto === r.id}"><b>${esc(r.nome)}</b><span>${r.taglia} giocatori</span></button>`).join("");
 }
 function disegnaCal() {
   $("meseNome").textContent = mese.toLocaleDateString("it-IT", { month: "long", year: "numeric" });
@@ -105,40 +122,75 @@ function disegnaCal() {
   html += "<span></span>".repeat(primo);
   for (let g = 1; g <= giorni; g++) {
     const d = new Date(mese.getFullYear(), mese.getMonth(), g), k = iso(d);
-    html += `<button type="button" data-g="${k}" ${d < oggi ? "disabled" : ""} class="${+d === +oggi ? "oggi" : ""}" aria-pressed="${scelta.giorno === k}">${g}</button>`;
+    const qui = voci.filter(v => v.data === k);
+    html += `<button type="button" data-g="${k}" ${d < oggi ? "disabled" : ""} class="${+d === +oggi ? "oggi" : ""} ${qui.length ? "pieno" : ""}" aria-label="${g}${qui.length ? ": " + qui.map(v => nomeRaid(v.raid)).join(", ") : ""}">${g}${qui.map(v => `<span class="tag">${sigla(v.raid)}</span>`).join("")}</button>`;
   }
   $("cal").innerHTML = html;
 }
-function riepilogo() {
-  const r = R.RAID.find(x => x.id === scelta.raid);
-  const nomeCanale = scelta.giorno ? `${scelta.giorno.slice(8)}-${scelta.giorno.slice(5, 7)}-${r.nome.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}` : "";
-  const quando = scelta.giorno ? new Date(scelta.giorno + "T12:00").toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long" }) : null;
-  $("riepilogo").innerHTML = quando
-    ? `<b>${esc(r.nome)}</b> (${r.taglia}) · ${esc(quando)} · inizio <b>${esc($("ora").value)}</b>, ritrovo <b>${esc($("ritrovo").value)}</b><br><span style="color:var(--muted)">Canale: #${esc(nomeCanale)}</span>`
-    : `<span style="color:var(--muted)">Scegli il giorno nel calendario.</span>`;
-  $("crea").disabled = !quando;
+function disegnaLista() {
+  voci.sort((a, b) => (a.data + a.ora).localeCompare(b.data + b.ora));
+  $("lista").innerHTML = voci.length ? voci.map(v => {
+    const quando = new Date(v.data + "T12:00").toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long" });
+    const chiusa = v.stato === "ok" || inCorso;
+    return `<div class="riga ${v.stato}" data-k="${v.k}">
+      <span class="quando">${esc(quando)}</span>
+      ${v.stato === "ok" ? "<span>✓</span>" : `<button type="button" class="via" data-via="${v.k}" ${inCorso ? "disabled" : ""} aria-label="Togli">✕</button>`}
+      <div class="campi">
+        <label>Raid<select data-f="raid" ${chiusa ? "disabled" : ""}>${R.RAID.map(r => `<option value="${r.id}" ${r.id === v.raid ? "selected" : ""}>${esc(r.nome)} (${r.taglia})</option>`).join("")}</select></label>
+        <label>Inizio<input type="time" data-f="ora" value="${v.ora}" ${chiusa ? "disabled" : ""}></label>
+        <label>Ritrovo<input type="time" data-f="ritrovo" value="${v.ritrovo}" ${chiusa ? "disabled" : ""}></label>
+      </div>
+      ${v.msg ? `<div class="stato">${v.msg}</div>` : ""}
+    </div>`;
+  }).join("") : `<p class="vuota">Ancora nessuno: scegli il raid e tocca i giorni nel calendario.</p>`;
+  const daFare = voci.filter(v => v.stato !== "ok").length;
+  $("crea").textContent = inCorso ? "Creo i raid..." : daFare > 1 ? `Crea ${daFare} raid e i loro canali` : "Crea raid e canale";
+  $("crea").disabled = inCorso || !daFare;
 }
-function tutto() { disegnaRaid(); disegnaCal(); riepilogo(); }
+function tutto() { disegnaRaid(); disegnaCal(); disegnaLista(); }
 
 document.addEventListener("click", e => {
-  const r = e.target.closest("[data-raid]"); if (r) { scelta.raid = r.dataset.raid; tutto(); }
-  const g = e.target.closest("[data-g]"); if (g && !g.disabled) { scelta.giorno = g.dataset.g; tutto(); }
+  const r = e.target.closest("[data-raid]"); if (r) { scelto = r.dataset.raid; disegnaRaid(); return; }
+  const g = e.target.closest("[data-g]");
+  if (g && !g.disabled && !inCorso) {
+    const k = g.dataset.g, gia = voci.find(v => v.data === k && v.raid === scelto && v.stato !== "ok");
+    if (gia) voci = voci.filter(v => v !== gia);
+    else voci.push({ k: Math.random().toString(36).slice(2, 8), raid: scelto, data: k, ora: $("ora").value || "21:30", ritrovo: $("ritrovo").value || "", stato: "", msg: "" });
+    disegnaCal(); disegnaLista(); return;
+  }
+  const x = e.target.closest("[data-via]");
+  if (x) { voci = voci.filter(v => v.k !== x.dataset.via); disegnaCal(); disegnaLista(); }
 });
+document.addEventListener("change", e => {
+  const riga = e.target.closest(".riga"), f = e.target.dataset.f; if (!riga || !f) return;
+  const v = voci.find(x => x.k === riga.dataset.k); if (!v) return;
+  v[f] = e.target.value;
+  if (f === "raid") disegnaCal();
+});
+// cambiare gli orari in alto aggiorna anche i raid gia' in elenco non ancora creati
+["ora", "ritrovo"].forEach(id => $(id).addEventListener("change", () => { voci.forEach(v => { if (v.stato !== "ok") v[id] = $(id).value; }); disegnaLista(); }));
 $("prev").onclick = () => { mese = new Date(mese.getFullYear(), mese.getMonth() - 1, 1); disegnaCal(); };
 $("next").onclick = () => { mese = new Date(mese.getFullYear(), mese.getMonth() + 1, 1); disegnaCal(); };
-["ora", "ritrovo"].forEach(id => $(id).addEventListener("input", riepilogo));
 
 function esito(html, ok) { const x = $("esito"); x.hidden = false; x.className = "esito " + (ok ? "ok" : "bad"); x.innerHTML = html; }
 $("crea").onclick = async () => {
   if (!token || !cid) return esito("Serve il link del bot: su Discord scrivi <b>/raid crea</b>.", false);
-  $("crea").disabled = true; esito("Creo il raid e il canale...", true);
-  try {
-    const res = await fetch(R.RELAY + "/raid/nuovo", { method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ t: token, c: cid, raid: scelta.raid, data: scelta.giorno, ora: $("ora").value, ritrovo: $("ritrovo").value, note: $("note").value }) });
-    const d = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(d.errore || res.status);
-    esito(`Fatto! ${d.canale ? `Canale <b>#${esc(d.canale)}</b> creato. ` : ""}<a href="${esc(d.link)}">Apri il raid su Discord</a>${d.avviso ? `<br><br>${esc(d.avviso)}` : ""}`, !d.avviso);
-  } catch (err) { esito("Non riuscito: " + esc(err.message), false); $("crea").disabled = false; }
+  inCorso = true; $("esito").hidden = true; disegnaLista();
+  for (const v of voci.filter(x => x.stato !== "ok")) {
+    v.stato = ""; v.msg = "Creo...";
+    disegnaLista();
+    try {
+      const res = await fetch(R.RELAY + "/raid/nuovo", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ t: token, c: cid, raid: v.raid, data: v.data, ora: v.ora, ritrovo: v.ritrovo, note: $("note").value }) });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.errore || res.status);
+      v.stato = "ok";
+      v.msg = `${d.canale ? `Canale <b>#${esc(d.canale)}</b> creato. ` : ""}<a href="${esc(d.link)}">Apri su Discord</a>${d.avviso ? `<br>${esc(d.avviso)}` : ""}`;
+    } catch (err) { v.stato = "bad"; v.msg = "Non riuscito: " + esc(err.message); }
+  }
+  inCorso = false; disegnaCal(); disegnaLista();
+  const male = voci.filter(v => v.stato === "bad").length;
+  esito(male ? `${male} raid non creati: controlla l'errore sulla riga e premi di nuovo Crea.` : "Fatto! Tutti i raid sono su Discord, ognuno nel suo canale.", !male);
 };
 if (!token || !cid) esito("Serve il link del bot: su Discord scrivi <b>/raid crea</b>.", false);
 tutto();
