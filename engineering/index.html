@@ -357,7 +357,7 @@ window.addEventListener("hashchange", () => { const h = location.hash.slice(1); 
   try {
     const [p, mc] = await Promise.all([
       fetch(RELAY + "/professione?prof=" + encodeURIComponent(PROF)).then(r => r.ok ? r.json() : Promise.reject(r.status)),
-      fetch("../dati/mastercraft.json?v=f39593bb9d").then(r => r.json()),
+      fetch("../dati/mastercraft.json?v=c48bdaf604").then(r => r.json()),
     ]);
     ARTIGIANI = p.artigiani || [];
     costruisci(ARTIGIANI, mc);

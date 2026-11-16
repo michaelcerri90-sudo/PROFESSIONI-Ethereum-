@@ -123,7 +123,7 @@ textarea{min-height:120px;resize:vertical}
 <dialog id="dlgAddon">
   <form method="dialog">
     <h2>Riga per l'addon</h2>
-    <p class="muted">In gioco scrivi <b>/raideth</b>, incolla questa riga e premi Importa. L'addon la manda da solo agli altri addon della gilda: chi e' nel raid ricevera' l'avviso di gruppare.</p>
+    <p class="muted">In gioco scrivi <b>/ert</b>, incolla questa riga e premi Importa. L'addon la manda da solo agli altri addon della gilda: chi e' nel raid ricevera' l'avviso di gruppare.</p>
     <textarea id="addonTxt" readonly style="min-height:90px"></textarea>
     <div class="barra"><button class="btn" type="button" id="addonCopia">Copia</button><button class="btn min" type="submit">Chiudi</button></div>
   </form>
@@ -284,7 +284,7 @@ function disegnaBoard() {
     html += `<div class="raid"><header><h2>${titolo} <span class="muted">(${raid.taglia})</span></h2>${scegli}
       ${sceltaReferenti(raid, r)}
       <div class="conta"><span>Tank <b>${ruoli.T}</b></span><span>Healer <b>${ruoli.H}</b></span><span>DPS <b>${ruoli.D}</b></span><span>Totale <b>${membri.length}/${raid.taglia}</b></span></div>
-      <span><button class="btn min" type="button" data-addon="${r}" title="Riga da incollare nell'addon RaidEthereum in gioco">Per l'addon</button> <button class="btn min" type="button" data-delraid="${r}">Togli raid</button></span></header><div class="gruppi">`;
+      <span><button class="btn min" type="button" data-addon="${r}" title="Riga da incollare nell'addon ERT in gioco">Per l'addon</button> <button class="btn min" type="button" data-delraid="${r}">Togli raid</button></span></header><div class="gruppi">`;
     raid.gruppi.forEach((g, gi) => {
       const pg = buffPresenti(g.filter(Boolean));
       const gb = R.BUFF.filter(b => b.tipo === "gruppo" && pg.has(b.id));
