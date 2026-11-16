@@ -82,7 +82,7 @@ input,select{font:inherit;color:var(--ink);background:var(--bg);border:1px solid
   <section class="box">
     <h2>3 · Orari della serata (ora italiana)</h2>
     <div class="orari">
-      <label>Ritrovo<input type="time" id="ritrovo" value="21:00"></label>
+      <label title="Di base mezz'ora prima dell'inizio">Ritrovo<input type="time" id="ritrovo" value="21:00"></label>
       <label>Inizio<input type="time" id="ora" value="21:30"></label>
       <label>Fine<input type="time" id="fine" value="00:00"></label>
     </div>
@@ -195,6 +195,14 @@ $("crea").onclick = async () => {
 };
 if (!token || !cid) esito("Serve il link del bot: su Discord scrivi <b>/raid crea</b>.", false);
 tutto();
+
+// cambiando l'inizio, il ritrovo va da solo a mezz'ora prima (resta modificabile a mano)
+$("ora").addEventListener("change", () => {
+  const m = String($("ora").value).match(/^(\d{2}):(\d{2})$/); if (!m) return;
+  const t = (+m[1] * 60 + +m[2] - 30 + 1440) % 1440;
+  $("ritrovo").value = `${String(Math.floor(t / 60)).padStart(2, "0")}:${String(t % 60).padStart(2, "0")}`;
+  $("ritrovo").dispatchEvent(new Event("input", { bubbles: true }));
+});
 </script>
 
 </html>

@@ -46,6 +46,7 @@ p{margin:0}
 .chip .r2 .ic{width:15px;height:15px}
 .chip .tag{display:flex;gap:4px;margin-left:auto;flex:none}
 .chip .ic.attiva{outline:1px solid var(--gold);outline-offset:1px}
+.chip .peric{flex:none;font-size:13px;line-height:1;cursor:help}
 .chip .segno{flex:none;width:16px;height:16px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;line-height:1}
 .chip .segno.ok{background:var(--ok);color:#06200a}
 .chip .segno.meta{color:#f0c040;font-size:15px}
@@ -163,6 +164,16 @@ const oraIt = ts => new Date(ts * 1000).toLocaleTimeString("it-IT", { hour: "2-d
 const referenti = t => [...new Set(String(t || "").split(/[\s,;\/+|]+/).map(x => x.replace(/[^\p{L}\p{M}'-]/gu, "")).filter(Boolean))].slice(0, 6);
 const tabella = (taglia, k) => ({ k: k || null, taglia, gruppi: Array.from({ length: taglia / 5 }, () => Array(5).fill(null)), panca: [] });
 
+// lockout (reset il mercoledi'): stesso personaggio confermato nello stesso raid in un'altra run della settimana
+const giornoBreve = ts => new Date(ts * 1000).toLocaleDateString("it-IT", { weekday: "short", day: "numeric", month: "numeric", timeZone: "Europe/Rome" });
+function pericolo(u, raidTipo) {
+  const fuori = ((EV.altrove || {})[u] || []).filter(c => c.raid === raidTipo).map(c => `${c.raidNome} di ${giornoBreve(c.ts)}`);
+  const qui = comp.raids.filter(t => { const r = raidDi(t); return r && r.raid === raidTipo && t.gruppi.flat().includes(u); }).length;
+  if (qui > 1) fuori.push("due run di questo raid qui");
+  return fuori.length ? fuori : null;
+}
+const segnoPericolo = l => l ? `<span class="peric" title="Gia' confermato questa settimana (reset il mercoledi'): ${esc(l.join(", "))}">⚠️</span>` : "";
+
 function posti(u) {
   const l = [];
   comp.raids.forEach((t, r) => t.gruppi.forEach((g, gi) => { const s = g.indexOf(u); if (s >= 0) l.push({ r, g: gi, s }); }));
@@ -209,7 +220,7 @@ function chip(u, opzioni = {}) {
   const toggle = altra ? `<button class="sw" type="button" data-sw="${esc(u)}" title="Passa a ${esc(infoSpec(altra).nome)}">⇄</button>` : "";
   if (!opzioni.pool) {
     return `<div class="${classi}" style="--c:${colore(u)}" draggable="true" data-u="${esc(u)}" title="${esc((x.discord || "") + " · " + sp.nome + (fuori ? " · non si e' segnato a questo raid" : ""))}">
-      <span class="n">${esc(x.nome)}</span>${ic(k)}${toggle}</div>`;
+      ${segnoPericolo(raidDi(opzioni.tab || {}) ? pericolo(u, raidDi(opzioni.tab).raid) : null)}<span class="n">${esc(x.nome)}</span>${ic(k)}${toggle}</div>`;
   }
   const dov = posti(u);
   const tabMie = comp.raids.map((t, r) => r).filter(r => !comp.raids[r].k || x.raids.includes(comp.raids[r].k));
@@ -223,7 +234,7 @@ function chip(u, opzioni = {}) {
   const tag = [solo ? `<span class="st" title="Segnato solo a questi raid">solo ${esc(solo)}</span>` : "", stato ? `<span class="st">${stato}</span>` : ""].join("");
   const buff = R.buffDi(k).map(b => icona(b.icona, b.nome + (b.tipo === "gruppo" ? " (gruppo)" : ""))).join("");
   return `<div class="${classi} pool" style="--c:${colore(u)}" draggable="true" data-u="${esc(u)}" title="${esc(x.discord || "")}">
-    <div class="r1">${segno}<span class="n">${esc(x.nome)}</span>${ic(x.spec, k === x.spec ? " attiva" : "")}${x.alt ? ic(x.alt, k === x.alt ? " attiva" : "") : ""}<span class="tag">${tag}</span>${toggle}</div>
+    <div class="r1">${segno}${segnoPericolo([...new Set((EV.raids || []).filter(r => x.raids.includes(r.k)).flatMap(r => pericolo(u, r.raid) || []))].join(", ") ? [...new Set((EV.raids || []).filter(r => x.raids.includes(r.k)).flatMap(r => pericolo(u, r.raid) || []))] : null)}<span class="n">${esc(x.nome)}</span>${ic(x.spec, k === x.spec ? " attiva" : "")}${x.alt ? ic(x.alt, k === x.alt ? " attiva" : "") : ""}<span class="tag">${tag}</span>${toggle}</div>
     ${buff ? `<div class="r2">${buff}</div>` : ""}</div>`;
 }
 
@@ -386,7 +397,7 @@ $("dlg").addEventListener("close", async () => {
       Object.values(r.esiti || {}).forEach(v => v === "ok" ? fatti++ : errori++);
       esito(`Messaggi privati inviati: ${fatti}/${lista.length}...`, true);
     }
-    esito(`Pubblicato. Messaggi privati: ${fatti} inviati${errori ? `, ${errori} non riusciti (hanno i messaggi diretti chiusi)` : ""}.${d.avviso ? " " + d.avviso : ""}`, !d.avviso && !errori);
+    esito(`Pubblicato. Messaggi privati: ${fatti} inviati${errori ? `, ${errori} non riusciti (hanno i messaggi diretti chiusi)` : ""}.${d.referenti ? ` Stringa per l'addon mandata in privato a ${d.referenti === 1 ? "1 referente" : d.referenti + " referenti"}.` : ""}${d.avviso ? " " + d.avviso : ""}`, !d.avviso && !errori);
   } catch (err) { esito("Pubblicazione non riuscita: " + err.message, false); }
 });
 // riga per l'addon: RE1|id|raid|inizio|ritrovo|referente|gruppo1;gruppo2;...|panchina (nomi separati da virgola)
