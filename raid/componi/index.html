@@ -99,6 +99,15 @@ textarea{min-height:120px;resize:vertical}
   </div>
 </div>
 
+<dialog id="dlgAddon">
+  <form method="dialog">
+    <h2>Riga per l'addon</h2>
+    <p class="muted">In gioco scrivi <b>/raideth</b>, incolla questa riga e premi Importa. L'addon la manda da solo agli altri addon della gilda: chi e' nel raid ricevera' l'avviso di gruppare.</p>
+    <textarea id="addonTxt" readonly style="min-height:90px"></textarea>
+    <div class="barra"><button class="btn" type="button" id="addonCopia">Copia</button><button class="btn min" type="submit">Chiudi</button></div>
+  </form>
+</dialog>
+
 <dialog id="dlg">
   <form method="dialog" id="frm">
     <h2>Pubblica i gruppi</h2>
@@ -196,7 +205,7 @@ function disegnaBoard() {
     const pres = buffPresenti(membri);
     html += `<div class="raid"><header><h2>Raid ${r + 1} · ${raid.taglia}</h2>
       <div class="conta"><span>Tank <b>${ruoli.T}</b></span><span>Healer <b>${ruoli.H}</b></span><span>DPS <b>${ruoli.D}</b></span><span>Totale <b>${membri.length}/${raid.taglia}</b></span></div>
-      <button class="btn min" type="button" data-delraid="${r}">Togli raid</button></header><div class="gruppi">`;
+      <span><button class="btn min" type="button" data-addon="${r}" title="Riga da incollare nell'addon RaidEthereum in gioco">Per l'addon</button> <button class="btn min" type="button" data-delraid="${r}">Togli raid</button></span></header><div class="gruppi">`;
     raid.gruppi.forEach((g, gi) => {
       const pg = buffPresenti(g.filter(Boolean));
       const gb = R.BUFF.filter(b => b.tipo === "gruppo" && pg.has(b.id));
@@ -227,6 +236,8 @@ document.addEventListener("click", e => {
   if (xb) { togli(xb.dataset.x); modificato(); return; }
   const add = e.target.closest("[data-add]");
   if (add) { const t = +add.dataset.add; comp.raids.push({ taglia: t, gruppi: Array.from({ length: t / 5 }, () => Array(5).fill(null)) }); modificato(); return; }
+  const ad = e.target.closest("[data-addon]");
+  if (ad) { mostraAddon(+ad.dataset.addon); return; }
   const del = e.target.closest("[data-delraid]");
   if (del) { comp.raids.splice(+del.dataset.delraid, 1); modificato(); return; }
   const slot = e.target.closest("[data-slot]");
@@ -281,6 +292,18 @@ $("dlg").addEventListener("close", async () => {
     esito(`Pubblicato. Messaggi privati: ${fatti} inviati${errori ? `, ${errori} non riusciti (hanno i messaggi diretti chiusi)` : ""}.${d.avviso ? " " + d.avviso : ""}`, !d.avviso && !errori);
   } catch (err) { esito("Pubblicazione non riuscita: " + err.message, false); }
 });
+// riga per l'addon: RE1|id|raid|inizio|ritrovo|referente|gruppo1;gruppo2;...|panchina (nomi separati da virgola)
+function mostraAddon(r) {
+  const raid = comp.raids[r];
+  const nomi = l => l.filter(Boolean).map(u => iscritto(u).nome.replace(/[|;,]/g, "")).join(",");
+  const ritrovo = EV.ritrovo || EV.ts - 1800;
+  const ref = ($("referente").value || "").replace(/[|;,]/g, "").trim();
+  const riga = ["RE1", `${EV.id}-${r + 1}`, `${EV.raidNome}${comp.raids.length > 1 ? " " + (r + 1) : ""}`, EV.ts, ritrovo, ref,
+    raid.gruppi.map(nomi).join(";"), nomi(comp.panchina)].join("|");
+  $("addonTxt").value = riga;
+  $("dlgAddon").showModal();
+}
+$("addonCopia").onclick = () => { const t = $("addonTxt"); navigator.clipboard.writeText(t.value).then(() => { $("addonCopia").textContent = "Copiata"; }, () => { t.select(); }); };
 window.addEventListener("beforeunload", e => { if (sporco) { e.preventDefault(); e.returnValue = ""; } });
 
 (async () => {
@@ -297,6 +320,7 @@ window.addEventListener("beforeunload", e => { if (sporco) { e.preventDefault();
     if (d.bozza) comp = { raids: d.bozza.raids || [], panchina: d.bozza.panchina || [], spec: d.bozza.spec || {} };
     if (!comp.raids.length) { const t = d.taglia; comp.raids.push({ taglia: t, gruppi: Array.from({ length: t / 5 }, () => Array(5).fill(null)) }); }
     if (d.pubblicato) { $("ritrovo").value = d.pubblicato.ritrovo || ""; $("referente").value = d.pubblicato.referente || ""; $("consumabili").value = d.pubblicato.consumabili || ""; }
+    else if (d.ritrovo) $("ritrovo").value = new Date(d.ritrovo * 1000).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Rome" });
     disegna();
   } catch (err) { $("titolo").textContent = "Non riesco ad aprire il raid"; $("sotto").textContent = err.message; }
 })();

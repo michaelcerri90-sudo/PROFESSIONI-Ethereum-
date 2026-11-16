@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Nuovo raid</title>
+<meta name="robots" content="noindex">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alegreya+SC:wght@500;700&family=Alegreya+Sans:wght@400;500;700&display=swap">
+<style>
+/* Layout: tre passi in colonna (raid, giorno sul calendario, orari) e un riepilogo con il bottone Crea. */
+:root{
+  color-scheme:dark;
+  --bg:#0d1117; --panel:#151b24; --panel-2:#1c2430; --line:#2a3442; --ink:#e9e3d2; --muted:#9aa3ae;
+  --gold:#ffd000; --gold-soft:rgba(255,208,0,.14); --ok:#40c040; --bad:#ff6b5a;
+  --font-display:"Alegreya SC","Palatino Linotype",Georgia,serif;
+  --font-body:"Alegreya Sans","Segoe UI",system-ui,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{background:var(--bg)}
+body{margin:0;color:var(--ink);font-family:var(--font-body);font-size:16px;line-height:1.45;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:24px 48px}
+.wrap{max-width:620px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+h1{font-family:var(--font-display);font-size:clamp(28px,5vw,40px);margin:0;line-height:1.1}
+h1 small{display:block;font-family:var(--font-body);font-size:14px;font-weight:500;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;margin-bottom:6px}
+h2{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0 0 8px;font-weight:500}
+p{margin:0}
+.box{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:14px}
+.raid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.raid button{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:12px 8px;color:var(--ink);font:inherit;cursor:pointer;display:flex;flex-direction:column;gap:2px;align-items:center;text-align:center}
+.raid button b{font-family:var(--font-display);font-size:17px;line-height:1.15}
+.raid button span{color:var(--muted);font-size:13px}
+.raid button[aria-pressed="true"]{border-color:var(--gold);background:var(--gold-soft)}
+.mese{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.mese b{font-family:var(--font-display);font-size:20px;text-transform:capitalize}
+.mese button{background:var(--panel-2);border:1px solid var(--line);color:var(--ink);border-radius:4px;width:36px;height:32px;cursor:pointer;font-size:18px}
+.cal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px;text-align:center}
+.cal .dg{font-size:12px;color:var(--muted);padding:2px 0}
+.cal button{background:var(--bg);border:1px solid var(--line);border-radius:5px;color:var(--ink);font:inherit;padding:9px 0;cursor:pointer;font-variant-numeric:tabular-nums}
+.cal button:disabled{opacity:.3;cursor:default}
+.cal button.oggi{border-color:var(--muted)}
+.cal button[aria-pressed="true"]{background:var(--gold);color:#1a1400;border-color:var(--gold);font-weight:700}
+.orari{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+label{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted)}
+input{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:4px;padding:8px 10px;width:100%}
+.riepilogo{border-color:var(--gold)}
+.riepilogo p{font-size:15px}
+.btn{background:var(--gold);color:#1a1400;border:0;border-radius:4px;padding:12px 18px;font:inherit;font-weight:700;cursor:pointer;width:100%;margin-top:10px}
+.btn:disabled{opacity:.5;cursor:default}
+.esito{padding:10px 12px;border-radius:4px;border:1px solid var(--line);background:var(--panel);overflow-wrap:anywhere}
+.esito.ok{border-color:var(--ok)} .esito.bad{border-color:var(--bad);color:var(--bad)}
+.esito a{color:var(--gold)}
+:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+</style>
+
+<div class="wrap">
+  <h1><small>Raid Ethereum</small>Nuovo raid</h1>
+
+  <section class="box">
+    <h2>Raid</h2>
+    <div class="raid" id="raid"></div>
+  </section>
+
+  <section class="box">
+    <h2>Giorno</h2>
+    <div class="mese"><button type="button" id="prev" aria-label="Mese prima">‹</button><b id="meseNome"></b><button type="button" id="next" aria-label="Mese dopo">›</button></div>
+    <div class="cal" id="cal"></div>
+  </section>
+
+  <section class="box">
+    <h2>Orari (ora italiana)</h2>
+    <div class="orari">
+      <label>Inizio<input type="time" id="ora" value="21:30"></label>
+      <label>Ritrovo<input type="time" id="ritrovo" value="21:00"></label>
+    </div>
+    <label style="margin-top:10px">Note (facoltative)<input type="text" id="note" maxlength="300" placeholder="es. portate le resistenze al fuoco"></label>
+  </section>
+
+  <section class="box riepilogo">
+    <p id="riepilogo"></p>
+    <button class="btn" type="button" id="crea">Crea raid e canale</button>
+  </section>
+  <div id="esito" class="esito" hidden></div>
+</div>
+
+<script src="../dati.js"></script>
+<script>
+const R = window.RAID;
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const h = new URLSearchParams(location.hash.slice(1));
+const token = h.get("t") || "", cid = h.get("c") || "";
+const oggi = new Date(); oggi.setHours(0, 0, 0, 0);
+let scelta = { raid: "hyjal", giorno: null }, mese = new Date(oggi.getFullYear(), oggi.getMonth(), 1);
+const iso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+function disegnaRaid() {
+  $("raid").innerHTML = R.RAID.map(r => `<button type="button" data-raid="${r.id}" aria-pressed="${scelta.raid === r.id}"><b>${esc(r.nome)}</b><span>${r.taglia} giocatori</span></button>`).join("");
+}
+function disegnaCal() {
+  $("meseNome").textContent = mese.toLocaleDateString("it-IT", { month: "long", year: "numeric" });
+  $("prev").disabled = mese <= new Date(oggi.getFullYear(), oggi.getMonth(), 1);
+  const primo = (mese.getDay() + 6) % 7; // lunedi' = 0
+  const giorni = new Date(mese.getFullYear(), mese.getMonth() + 1, 0).getDate();
+  let html = ["lu", "ma", "me", "gi", "ve", "sa", "do"].map(d => `<span class="dg">${d}</span>`).join("");
+  html += "<span></span>".repeat(primo);
+  for (let g = 1; g <= giorni; g++) {
+    const d = new Date(mese.getFullYear(), mese.getMonth(), g), k = iso(d);
+    html += `<button type="button" data-g="${k}" ${d < oggi ? "disabled" : ""} class="${+d === +oggi ? "oggi" : ""}" aria-pressed="${scelta.giorno === k}">${g}</button>`;
+  }
+  $("cal").innerHTML = html;
+}
+function riepilogo() {
+  const r = R.RAID.find(x => x.id === scelta.raid);
+  const nomeCanale = scelta.giorno ? `${scelta.giorno.slice(8)}-${scelta.giorno.slice(5, 7)}-${r.nome.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}` : "";
+  const quando = scelta.giorno ? new Date(scelta.giorno + "T12:00").toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long" }) : null;
+  $("riepilogo").innerHTML = quando
+    ? `<b>${esc(r.nome)}</b> (${r.taglia}) · ${esc(quando)} · inizio <b>${esc($("ora").value)}</b>, ritrovo <b>${esc($("ritrovo").value)}</b><br><span style="color:var(--muted)">Canale: #${esc(nomeCanale)}</span>`
+    : `<span style="color:var(--muted)">Scegli il giorno nel calendario.</span>`;
+  $("crea").disabled = !quando;
+}
+function tutto() { disegnaRaid(); disegnaCal(); riepilogo(); }
+
+document.addEventListener("click", e => {
+  const r = e.target.closest("[data-raid]"); if (r) { scelta.raid = r.dataset.raid; tutto(); }
+  const g = e.target.closest("[data-g]"); if (g && !g.disabled) { scelta.giorno = g.dataset.g; tutto(); }
+});
+$("prev").onclick = () => { mese = new Date(mese.getFullYear(), mese.getMonth() - 1, 1); disegnaCal(); };
+$("next").onclick = () => { mese = new Date(mese.getFullYear(), mese.getMonth() + 1, 1); disegnaCal(); };
+["ora", "ritrovo"].forEach(id => $(id).addEventListener("input", riepilogo));
+
+function esito(html, ok) { const x = $("esito"); x.hidden = false; x.className = "esito " + (ok ? "ok" : "bad"); x.innerHTML = html; }
+$("crea").onclick = async () => {
+  if (!token || !cid) return esito("Serve il link del bot: su Discord scrivi <b>/raid crea</b>.", false);
+  $("crea").disabled = true; esito("Creo il raid e il canale...", true);
+  try {
+    const res = await fetch(R.RELAY + "/raid/nuovo", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ t: token, c: cid, raid: scelta.raid, data: scelta.giorno, ora: $("ora").value, ritrovo: $("ritrovo").value, note: $("note").value }) });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(d.errore || res.status);
+    esito(`Fatto! ${d.canale ? `Canale <b>#${esc(d.canale)}</b> creato. ` : ""}<a href="${esc(d.link)}">Apri il raid su Discord</a>${d.avviso ? `<br><br>${esc(d.avviso)}` : ""}`, !d.avviso);
+  } catch (err) { esito("Non riuscito: " + esc(err.message), false); $("crea").disabled = false; }
+};
+if (!token || !cid) esito("Serve il link del bot: su Discord scrivi <b>/raid crea</b>.", false);
+tutto();
+</script>
+
+</html>
