@@ -152,8 +152,9 @@ let EV = null, comp = { raids: [], panchina: [], spec: {} }, sel = null, sporco 
 let REFERENTI = []; // personaggi di chi ha il ruolo dei referenti su Discord
 
 const iscritto = u => EV.unita[u];
-const specDi = u => comp.spec[u] || iscritto(u).spec;
-const altraDi = u => { const x = iscritto(u), a = x.alt || x.off; return a ? (specDi(u) === x.spec ? a : x.spec) : ""; };
+// spec in uso: ogni raid (tabella r) ha la sua, perche' nello stesso giorno uno puo' fare healer in un raid e DPS nell'altro
+const specDi = (u, r) => (r != null && comp.raids[r] && (comp.raids[r].spec || {})[u]) || iscritto(u).spec;
+const altraDi = (u, r) => { const x = iscritto(u), a = x.alt || x.off; return a ? (specDi(u, r) === x.spec ? a : x.spec) : ""; };
 const infoSpec = k => R.specPer[k] || { nome: "?", ruolo: "M", classe: "" };
 const colore = u => (R.CLASSI[iscritto(u).classe] || {}).colore || "#999";
 const icona = (n, titolo) => `<img class="ic" src="${R.ICO(n)}" alt="" title="${esc(titolo)}" loading="lazy">`;
@@ -162,7 +163,7 @@ const sigla = r => r.raidNome.split(/\s+/).map(w => w[0]).join("").toUpperCase()
 const oraIt = ts => new Date(ts * 1000).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Rome" });
 // "Cornelius, Karithan" / "Cornelius Karithan" -> ["Cornelius", "Karithan"] (nomi dei personaggi in gioco)
 const referenti = t => [...new Set(String(t || "").split(/[\s,;\/+|]+/).map(x => x.replace(/[^\p{L}\p{M}'-]/gu, "")).filter(Boolean))].slice(0, 6);
-const tabella = (taglia, k) => ({ k: k || null, taglia, gruppi: Array.from({ length: taglia / 5 }, () => Array(5).fill(null)), panca: [] });
+const tabella = (taglia, k) => ({ k: k || null, taglia, gruppi: Array.from({ length: taglia / 5 }, () => Array(5).fill(null)), panca: [], spec: {} });
 
 // lockout (reset il mercoledi'): stesso personaggio confermato nello stesso raid in un'altra run della settimana
 const giornoBreve = ts => new Date(ts * 1000).toLocaleDateString("it-IT", { weekday: "short", day: "numeric", month: "numeric", timeZone: "Europe/Rome" });
@@ -213,11 +214,11 @@ function modificato() { sporco = true; sel = null; disegna(); }
 // Iscritti (opzioni.pool): riga 1 nome, spec principale, seconda spec, stato; riga 2 tutti i buff che porta.
 // Nei raid: solo nome, spec in uso e il tasto per passare all'altra spec.
 function chip(u, opzioni = {}) {
-  const x = iscritto(u), k = specDi(u), sp = infoSpec(k), altra = altraDi(u);
+  const x = iscritto(u), k = specDi(u, opzioni.r), sp = infoSpec(k), altra = opzioni.pool ? "" : altraDi(u, opzioni.r);
   const fuori = opzioni.tab && opzioni.tab.k && !x.raids.includes(opzioni.tab.k);
   const classi = `chip${sel && sel.u === u ? " sel" : ""}${fuori ? " fuori" : ""}`;
   const ic = (spec, cl = "") => { const i = infoSpec(spec); return `<img class="ic${cl}" src="${R.ICO(i.icona || "inv_misc_questionmark")}" alt="" title="${esc(i.nome)}" loading="lazy">`; };
-  const toggle = altra ? `<button class="sw" type="button" data-sw="${esc(u)}" title="Passa a ${esc(infoSpec(altra).nome)}">⇄</button>` : "";
+  const toggle = altra ? `<button class="sw" type="button" data-sw="${esc(u)}" data-swr="${opzioni.r}" title="Passa a ${esc(infoSpec(altra).nome)}">⇄</button>` : "";
   if (!opzioni.pool) {
     return `<div class="${classi}" style="--c:${colore(u)}" draggable="true" data-u="${esc(u)}" title="${esc((x.discord || "") + " · " + sp.nome + (fuori ? " · non si e' segnato a questo raid" : ""))}">
       ${segnoPericolo(raidDi(opzioni.tab || {}) ? pericolo(u, raidDi(opzioni.tab).raid) : null)}<span class="n">${esc(x.nome)}</span>${ic(k)}${toggle}</div>`;
@@ -254,9 +255,9 @@ function disegnaPool() {
   $("pool").innerHTML = `<h2>Iscritti</h2>` + (html || `<p class="muted">Ancora nessun iscritto.</p>`);
 }
 
-function buffPresenti(membri) {
+function buffPresenti(membri, r) {
   const m = new Map();
-  for (const u of membri) for (const b of R.buffDi(specDi(u))) { if (!m.has(b.id)) m.set(b.id, []); m.get(b.id).push(iscritto(u).nome); }
+  for (const u of membri) for (const b of R.buffDi(specDi(u, r))) { if (!m.has(b.id)) m.set(b.id, []); m.get(b.id).push(iscritto(u).nome); }
   return m;
 }
 const buffIcona = (b, chi, extra = "") => `<span class="bi${chi ? "" : " no"}" title="${esc(b.nome + (b.nota ? " (" + b.nota + ")" : "") + (chi ? ": " + chi.join(", ") : ": nessuno"))}"><img src="${R.ICO(b.icona)}" alt="${esc(b.nome)}" loading="lazy">${extra}</span>`;
@@ -276,8 +277,8 @@ function disegnaBoard() {
   comp.raids.forEach((raid, r) => {
     const membri = raid.gruppi.flat().filter(Boolean);
     const ruoli = { T: 0, H: 0, D: 0 };
-    membri.forEach(u => { const ru = infoSpec(specDi(u)).ruolo; ruoli[ru === "T" || ru === "H" ? ru : "D"]++; });
-    const pres = buffPresenti(membri);
+    membri.forEach(u => { const ru = infoSpec(specDi(u, r)).ruolo; ruoli[ru === "T" || ru === "H" ? ru : "D"]++; });
+    const pres = buffPresenti(membri, r);
     const rd = raidDi(raid);
     const titolo = rd ? esc(rd.raidNome) : `Raid ${r + 1}`;
     const scegli = multi ? `<select class="perraid" data-perraid="${r}" title="A quale raid del giorno corrisponde">${EV.raids.map(x => `<option value="${x.k}" ${x.k === raid.k ? "selected" : ""}>${esc(x.raidNome)} (${x.taglia})</option>`).join("")}</select>` : "";
@@ -286,10 +287,10 @@ function disegnaBoard() {
       <div class="conta"><span>Tank <b>${ruoli.T}</b></span><span>Healer <b>${ruoli.H}</b></span><span>DPS <b>${ruoli.D}</b></span><span>Totale <b>${membri.length}/${raid.taglia}</b></span></div>
       <span><button class="btn min" type="button" data-addon="${r}" title="Riga da incollare nell'addon ERT in gioco">Per l'addon</button> <button class="btn min" type="button" data-delraid="${r}">Togli raid</button></span></header><div class="gruppi">`;
     raid.gruppi.forEach((g, gi) => {
-      const pg = buffPresenti(g.filter(Boolean));
+      const pg = buffPresenti(g.filter(Boolean), r);
       const gb = R.BUFF.filter(b => b.tipo === "gruppo" && pg.has(b.id));
       html += `<div class="gruppo"><div class="t"><span>Gruppo ${gi + 1}</span><span class="b">${gb.map(b => icona(b.icona, b.nome + ": " + pg.get(b.id).join(", "))).join("")}</span></div>` +
-        g.map((u, s) => u ? `<div class="slot" data-slot="${r},${gi},${s}">${chip(u, { tab: raid })}<button class="x" type="button" data-x="${esc(u)}" data-xd="${r},${gi},${s}" title="Togli">×</button></div>`
+        g.map((u, s) => u ? `<div class="slot" data-slot="${r},${gi},${s}">${chip(u, { tab: raid, r })}<button class="x" type="button" data-x="${esc(u)}" data-xd="${r},${gi},${s}" title="Togli">×</button></div>`
           : `<div class="slot vuoto" data-slot="${r},${gi},${s}">+</div>`).join("") + `</div>`;
     });
     html += `</div><div class="buff">`;
@@ -297,12 +298,12 @@ function disegnaBoard() {
       html += `<div class="riga"><span class="l">${R.TIPI[tipo]}</span>${R.BUFF.filter(b => b.tipo === tipo).map(b => buffIcona(b, pres.get(b.id))).join("")}</div>`;
     }
     const grp = R.BUFF.filter(b => b.tipo === "gruppo").map(b => {
-      const n = raid.gruppi.filter(g => buffPresenti(g.filter(Boolean)).has(b.id)).length;
+      const n = raid.gruppi.filter(g => buffPresenti(g.filter(Boolean), r).has(b.id)).length;
       return buffIcona(b, n ? pres.get(b.id) : null, n ? `<em>${n}/${raid.gruppi.length}</em>` : "");
     });
     html += `<div class="riga"><span class="l">${R.TIPI.gruppo} (gruppi coperti)</span>${grp.join("")}</div></div>`;
     const panca = raid.panca || [];
-    html += `<h3>Panchina di questo raid<span>${panca.length}</span></h3><div class="panca" data-panca="${r}">${panca.map((u, i) => `<div class="slot" data-pancaslot="${r},${i}">${chip(u, { tab: raid })}<button class="x" type="button" data-x="${esc(u)}" data-xp="${r}">×</button></div>`).join("") || `<p class="muted">Clicca un giocatore e poi qui per metterlo in panchina in questo raid.</p>`}</div></div>`;
+    html += `<h3>Panchina di questo raid<span>${panca.length}</span></h3><div class="panca" data-panca="${r}">${panca.map((u, i) => `<div class="slot" data-pancaslot="${r},${i}">${chip(u, { tab: raid, r })}<button class="x" type="button" data-x="${esc(u)}" data-xp="${r}">×</button></div>`).join("") || `<p class="muted">Clicca un giocatore e poi qui per metterlo in panchina in questo raid.</p>`}</div></div>`;
   });
   if (!comp.raids.length) html += `<p class="muted">Aggiungi un raid da 10, 20 o 40 con i bottoni in alto.</p>`;
   $("board").innerHTML = html;
@@ -333,7 +334,14 @@ document.addEventListener("change", e => {
 document.addEventListener("click", e => {
   if (e.target.closest("select, input, .refsel")) return;
   const sw = e.target.closest("[data-sw]");
-  if (sw) { const u = sw.dataset.sw; comp.spec[u] = altraDi(u); if (comp.spec[u] === iscritto(u).spec) delete comp.spec[u]; modificato(); return; }
+  if (sw) {
+    const u = sw.dataset.sw, r = +sw.dataset.swr, t = comp.raids[r];
+    if (!t) return;
+    t.spec = t.spec || {};
+    t.spec[u] = altraDi(u, r);
+    if (t.spec[u] === iscritto(u).spec) delete t.spec[u];
+    modificato(); return;
+  }
   const xb = e.target.closest("[data-x]");
   if (xb) {
     const u = xb.dataset.x;
@@ -427,7 +435,13 @@ window.addEventListener("beforeunload", e => { if (sporco) { e.preventDefault();
     const quando = [giorno.charAt(0).toUpperCase() + giorno.slice(1), d.ritrovo ? "ritrovo " + oraIt(d.ritrovo) : "", "inizio " + oraIt(d.ts), d.fine ? "fine " + oraIt(d.fine) : ""].filter(Boolean).join(" · ");
     const n = new Set(Object.values(EV.unita).map(x => x.u)).size;
     $("sotto").textContent = `${quando} · ${n} iscritti` + (EV.raids.length > 1 ? ` · ${EV.raids.length} raid nello stesso giorno: dividi tu i giocatori tra le tabelle` : "") + (d.bozzaDi ? ` · bozza salvata da ${d.bozzaDi}` : "") + (d.pubblicato ? " · gruppi gia' pubblicati" : "");
-    if (d.bozza) comp = { raids: (d.bozza.raids || []).map(t => ({ ...t, panca: t.panca || [] })), panchina: [], spec: d.bozza.spec || {} };
+    if (d.bozza) {
+      // spec vecchie (uguali per tutti i raid): passano a ogni raid in cui la persona e' stata messa
+      const vecchie = d.bozza.spec || {};
+      comp = { raids: (d.bozza.raids || []).map(t => { const sp = { ...(t.spec || {}) };
+        for (const u of t.gruppi.flat().concat(t.panca || [])) if (u && vecchie[u] && !sp[u]) sp[u] = vecchie[u];
+        return { ...t, panca: t.panca || [], spec: sp }; }), panchina: [], spec: {} };
+    }
     if (d.bozza && (d.bozza.panchina || []).length && comp.raids[0]) comp.raids[0].panca.push(...d.bozza.panchina.filter(u => !comp.raids[0].panca.includes(u)));
     try { const rr = await fetch(`${R.RELAY}/raid/referenti?t=${encodeURIComponent(token)}&id=${encodeURIComponent(evId)}`); if (rr.ok) REFERENTI = (await rr.json()).referenti || []; } catch (e) {}
     // una tabella per ogni raid del giorno che non ne ha ancora una
