@@ -41,7 +41,7 @@ input[type=text],select{font:inherit;font-size:15px;color:var(--ink);background:
 <div class="wrap">
   <h1><small>Raid Ethereum · WoW: Forever</small>I miei personaggi</h1>
   <p class="muted" id="saluto">Caricamento...</p>
-  <p class="muted">Per ogni personaggio scegli la spec principale e, se sei pronto anche per un altro ruolo, una spec secondaria. Quello "predefinito" e' quello con cui ti iscrivi premendo Iscriviti. Se hai una spec secondaria, quando ti iscrivi sei segnato con tutte e due (la principale decide se stai tra tank/healer o tra i DPS); se non vuoi la seconda la togli dal messaggio del raid. Nel raid puoi sempre cambiarlo.</p>
+  <p class="muted">Per ogni personaggio scegli la spec principale e, se sei pronto anche per un altro ruolo, una spec secondaria. Il <b>main</b> e' quello con cui ti iscrivi premendo Iscriviti (poi nel raid puoi scegliere un altro personaggio). Se hai una spec secondaria, quando ti iscrivi sei segnato con tutte e due (la principale decide se stai tra tank/healer o tra i DPS); se non vuoi la seconda la togli dal messaggio del raid. Nel raid puoi sempre cambiarlo.</p>
   <div id="lista"></div>
   <div class="barra">
     <button class="btn alt" type="button" id="aggiungi">+ Aggiungi personaggio</button>
@@ -72,7 +72,7 @@ function disegna() {
       <label>Spec principale<select data-k="spec" ${c.classe ? "" : "disabled"}>${c.classe ? opzioniSpec(c.classe, c.spec, "Scegli...") : "<option>prima la classe</option>"}</select></label>
       <label>Spec secondaria<select data-k="off" ${c.classe ? "" : "disabled"}>${c.classe ? opzioniSpec(c.classe, c.off, "nessuna") : "<option>-</option>"}</select></label>
       <div class="azioni">
-        <label class="def"><input type="radio" name="def" data-k="def" ${c.def ? "checked" : ""}> predefinito</label>
+        <label class="def"><input type="radio" name="def" data-k="def" ${c.def ? "checked" : ""}> main</label>
         <button class="btn via" type="button" data-via="${n}">Togli</button>
       </div>
     </div>`).join("");

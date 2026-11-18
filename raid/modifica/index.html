@@ -75,6 +75,7 @@ input,select{font:inherit;color:var(--ink);background:var(--bg);border:1px solid
       <label>Inizio<input type="time" id="ora"></label>
       <label>Fine<input type="time" id="fine"></label>
     </div>
+    <label style="margin-top:10px" title="Dopo la chiusura chi si iscrive finisce in riserva (0 = mai)">Chiusura iscrizioni: ore prima dell'inizio<input type="number" id="chiusura" min="0" max="168" step="1" value="24"></label>
   </section>
 
   <section class="box">
@@ -153,7 +154,7 @@ $("salva").onclick = async () => {
   $("salva").disabled = true; esito("Salvo...", true);
   try {
     const res = await fetch(R.RELAY + "/raid/modifica", { method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ t: token, id: evId, data: giorno, ora: $("ora").value || "21:30", ritrovo: $("ritrovo").value, fine: $("fine").value, note: $("note").value, raids: righe.map(r => ({ k: r.k || undefined, raid: r.raid })) }) });
+      body: JSON.stringify({ t: token, id: evId, data: giorno, ora: $("ora").value || "21:30", ritrovo: $("ritrovo").value, fine: $("fine").value, chiusura: $("chiusura").value, note: $("note").value, raids: righe.map(r => ({ k: r.k || undefined, raid: r.raid })) }) });
     const d = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(d.errore || res.status);
     esito(`Salvato! Il messaggio del raid e' aggiornato e nel canale c'e' un avviso per chi e' gia' segnato. <a href="${esc(d.link)}">Apri su Discord</a>`, true);
@@ -171,7 +172,7 @@ async function carica() {
   const [y, m] = giorno.split("-").map(Number);
   mese = new Date(y, m - 1, 1);
   righe = d.raids.map(x => ({ k: x.k, raid: x.raid }));
-  $("ora").value = oraIt(d.ts); $("ritrovo").value = d.ritrovo ? oraIt(d.ritrovo) : ""; $("fine").value = d.fine ? oraIt(d.fine) : "";
+  $("ora").value = oraIt(d.ts); $("ritrovo").value = d.ritrovo ? oraIt(d.ritrovo) : ""; $("fine").value = d.fine ? oraIt(d.fine) : ""; $("chiusura").value = d.chiusuraOre != null ? d.chiusuraOre : 0;
   $("note").value = d.note || "";
   $("titolo").textContent = d.raidNome;
   const n = new Set(Object.values(d.unita || {}).map(x => x.u)).size;

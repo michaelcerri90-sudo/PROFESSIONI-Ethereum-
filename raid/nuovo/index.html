@@ -86,6 +86,7 @@ input,select{font:inherit;color:var(--ink);background:var(--bg);border:1px solid
       <label>Inizio<input type="time" id="ora" value="21:30"></label>
       <label>Fine<input type="time" id="fine" value="00:00"></label>
     </div>
+    <label style="margin-top:10px" title="Dopo la chiusura chi si iscrive finisce in riserva (0 = mai)">Chiusura iscrizioni: ore prima dell'inizio<input type="number" id="chiusura" min="0" max="168" step="1" value="24"></label>
     <label style="margin-top:10px">Note per tutti (facoltative)<input type="text" id="note" maxlength="300" placeholder="es. portate le resistenze al fuoco"></label>
   </section>
 
@@ -182,7 +183,7 @@ $("crea").onclick = async () => {
     disegnaLista();
     try {
       const res = await fetch(R.RELAY + "/raid/nuovo", { method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ t: token, c: cid, data: giorno, ora: $("ora").value || "21:30", ritrovo: $("ritrovo").value, fine: $("fine").value, note: $("note").value, raids: quelli.map(v => ({ raid: v.raid })) }) });
+        body: JSON.stringify({ t: token, c: cid, data: giorno, ora: $("ora").value || "21:30", ritrovo: $("ritrovo").value, fine: $("fine").value, chiusura: $("chiusura").value, note: $("note").value, raids: quelli.map(v => ({ raid: v.raid })) }) });
       const d = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(d.errore || res.status);
       const testo = `${d.canale ? `Canale <b>#${esc(d.canale)}</b> creato. ` : d.aggiunto ? "Aggiunto al canale gia' aperto per questo giorno. " : ""}<a href="${esc(d.link)}">Apri su Discord</a>${d.avviso ? `<br>${esc(d.avviso)}` : ""}`;
