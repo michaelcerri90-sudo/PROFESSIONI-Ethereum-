@@ -14,7 +14,7 @@
 #>
 param([switch]$Installa, [switch]$Disinstalla, [switch]$Una)
 
-$VERSIONE = '1.0'
+$VERSIONE = '1.1'
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
@@ -176,6 +176,7 @@ function TestoDati($d, $stato) {
   }
   $l.Add('  },')
   $l.Add('  inviati = { ' + ((@($stato.inviati) | ForEach-Object { LuaStr $_ }) -join ', ') + ' },')
+  $l.Add('  annullati = { ' + ((@($d.annullati) | Where-Object { $_ } | ForEach-Object { LuaStr $_ }) -join ', ') + ' },')
   return ($l -join "`n")
 }
 function ScriviDati($cfg, $stato, $wow) {

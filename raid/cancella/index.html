@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Cancella raid</title>
+<meta name="robots" content="noindex">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alegreya+SC:wght@500;700&family=Alegreya+Sans:wght@400;500;700&display=swap">
+<style>
+/* Layout: elenco dei giorni di raid in programma; per ogni giorno i suoi raid con una casella.
+   Si spuntano i raid da annullare e si conferma: niente piu' promemoria, avvisi e inviti. */
+:root{
+  color-scheme:dark;
+  --bg:#0d1117; --panel:#151b24; --panel-2:#1c2430; --line:#2a3442; --ink:#e9e3d2; --muted:#9aa3ae;
+  --gold:#ffd000; --gold-soft:rgba(255,208,0,.14); --ok:#40c040; --bad:#ff6b5a;
+  --font-display:"Alegreya SC","Palatino Linotype",Georgia,serif;
+  --font-body:"Alegreya Sans","Segoe UI",system-ui,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{background:var(--bg)}
+body{margin:0;color:var(--ink);font-family:var(--font-body);font-size:16px;line-height:1.45;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:24px 48px}
+.wrap{max-width:620px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+h1{font-family:var(--font-display);font-size:clamp(28px,5vw,40px);margin:0;line-height:1.1}
+h1 small{display:block;font-family:var(--font-body);font-size:14px;font-weight:500;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;margin-bottom:6px}
+p{margin:0}
+.muted{color:var(--muted);font-size:14px}
+.giorno{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:14px;display:flex;flex-direction:column;gap:8px}
+.giorno.scelto{border-color:var(--bad)}
+.giorno header{display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap}
+.giorno h2{font-family:var(--font-display);font-size:20px;margin:0;text-transform:capitalize}
+.giorno header a{color:var(--gold);font-size:14px}
+.raid{display:flex;align-items:center;gap:10px;background:var(--bg);border:1px solid var(--line);border-radius:5px;padding:10px 12px;cursor:pointer}
+.raid input{width:20px;height:20px;accent-color:var(--bad);flex:none}
+.raid .n{flex:1;min-width:0}
+.raid .i{font-size:13px;color:var(--muted);white-space:nowrap}
+.raid:has(input:checked){border-color:var(--bad);background:rgba(255,107,90,.08)}
+.raid.off{opacity:.55;cursor:default}
+.can{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--muted)}
+.can input{width:18px;height:18px;accent-color:var(--bad)}
+.btn{background:var(--bad);color:#1a0400;border:0;border-radius:4px;padding:12px 18px;font:inherit;font-weight:700;cursor:pointer;width:100%}
+.btn:disabled{opacity:.45;cursor:default}
+.esito{padding:10px 12px;border-radius:4px;border:1px solid var(--line);background:var(--panel);overflow-wrap:anywhere}
+.esito.ok{border-color:var(--ok)} .esito.bad{border-color:var(--bad);color:var(--bad)}
+:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+</style>
+
+<div class="wrap">
+  <h1><small>Raid Ethereum</small>Cancella raid</h1>
+  <p class="muted" id="sotto">Caricamento...</p>
+  <div id="lista" style="display:flex;flex-direction:column;gap:12px"></div>
+  <button class="btn" type="button" id="via" disabled>Annulla i raid scelti</button>
+  <div id="esito" class="esito" hidden></div>
+</div>
+
+<script src="../dati.js"></script>
+<script>
+const R = window.RAID;
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const h = new URLSearchParams(location.hash.slice(1));
+const token = h.get("t") || "", cid = h.get("c") || "";
+const giornoIt = ts => new Date(ts * 1000).toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long", timeZone: "Europe/Rome" });
+const oraIt = ts => new Date(ts * 1000).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Rome" });
+let EVENTI = [];
+
+function scelti() {
+  return EVENTI.map(e => ({ e, ks: [...document.querySelectorAll(`[data-ev="${e.id}"] input[data-k]:checked`)].map(x => x.dataset.k),
+    canale: !!document.querySelector(`[data-ev="${e.id}"] input[data-canale]:checked`) })).filter(x => x.ks.length);
+}
+function aggiorna() {
+  for (const e of EVENTI) {
+    const box = document.querySelector(`[data-ev="${e.id}"]`);
+    const tutti = e.raids.every(r => box.querySelector(`input[data-k="${r.k}"]`).checked);
+    box.classList.toggle("scelto", tutti);
+    const can = box.querySelector(".can");
+    if (can) can.hidden = !tutti;
+  }
+  $("via").disabled = !scelti().length;
+}
+function disegna() {
+  if (!EVENTI.length) { $("lista").innerHTML = ""; $("sotto").textContent = "Non ci sono raid in programma da annullare."; $("via").hidden = true; return; }
+  $("sotto").textContent = "Spunta i raid da annullare. Un raid annullato non manda piu' promemoria, avvisi e inviti, e sparisce dall'addon ERT.";
+  $("lista").innerHTML = EVENTI.map(e => `<section class="giorno" data-ev="${e.id}">
+    <header><h2>${esc(giornoIt(e.ts))} · ${oraIt(e.ts)}</h2>${e.link ? `<a href="${esc(e.link)}">Apri su Discord</a>` : ""}</header>
+    ${e.raids.map(r => `<label class="raid ${e.puoi ? "" : "off"}"><input type="checkbox" data-k="${esc(r.k)}" ${e.puoi ? "" : "disabled"}>
+      <span class="n">${esc(r.raidNome)} (${r.taglia})</span><span class="i">${r.iscritti} iscritti</span></label>`).join("")}
+    ${e.puoi ? (e.canaleNostro ? `<label class="can" hidden><input type="checkbox" data-canale="1"> Cancella anche il canale del raid (senza spunta resta, con l'avviso "annullato")</label>` : "")
+      : `<p class="muted">Puo' annullarlo solo chi l'ha creato o un referente.</p>`}
+    ${e.pubblicato ? `<p class="muted">I gruppi erano gia' stati pubblicati.</p>` : ""}
+  </section>`).join("");
+}
+document.addEventListener("change", e => { if (e.target.closest("[data-ev]")) aggiorna(); });
+
+function esito(html, ok) { const x = $("esito"); x.hidden = false; x.className = "esito " + (ok ? "ok" : "bad"); x.innerHTML = html; }
+$("via").onclick = async () => {
+  const l = scelti();
+  if (!l.length) return;
+  const testo = l.map(({ e, ks }) => `- ${giornoIt(e.ts)}: ${e.raids.filter(r => ks.includes(r.k)).map(r => r.raidNome).join(", ")}${ks.length === e.raids.length ? " (tutto il giorno)" : ""}`).join("\n");
+  if (!confirm(`Annullare questi raid?\n${testo}\n\nNon si torna indietro: per rifarli bisogna crearli di nuovo con /raid crea.`)) return;
+  $("via").disabled = true; esito("Annullo...", true);
+  const fatti = [], errori = [];
+  for (const { e, ks, canale } of l) {
+    try {
+      const res = await fetch(R.RELAY + "/raid/cancella", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ t: token, c: cid, id: e.id, raids: ks, canale }) });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.errore || res.status);
+      fatti.push(`${giornoIt(e.ts)}: ${d.esito}`);
+    } catch (err) { errori.push(`${giornoIt(e.ts)}: ${err.message}`); }
+  }
+  esito((fatti.length ? `Fatto. ${fatti.map(esc).join("; ")}.` : "") + (errori.length ? ` Non riuscito: ${errori.map(esc).join("; ")}.` : ""), !errori.length);
+  await carica();
+};
+
+async function carica() {
+  const r = await fetch(`${R.RELAY}/raid/cancellabili?t=${encodeURIComponent(token)}&c=${encodeURIComponent(cid)}`);
+  const d = await r.json();
+  if (!r.ok) throw new Error(d.errore || r.status);
+  EVENTI = d.eventi || [];
+  disegna(); aggiorna();
+}
+(async () => {
+  if (!token || !cid) { $("sotto").innerHTML = "Serve il link del bot: su Discord scrivi <b>/raid cancella</b>."; $("via").hidden = true; return; }
+  try { await carica(); } catch (err) { $("sotto").textContent = "Non riesco ad aprire l'elenco: " + err.message; $("via").hidden = true; }
+})();
+</script>
+
+</html>
