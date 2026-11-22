@@ -15,9 +15,9 @@
   File: %LOCALAPPDATA%\ERT-Ponte (config.json = la tua chiave personale, ponte.log = cosa ha fatto).
   Per toglierlo: Disinstalla.cmd nella stessa cartella.
 #>
-param([switch]$Installa, [switch]$Disinstalla, [switch]$Una, [switch]$Collega, [switch]$DaExe)
+param([switch]$Installa, [switch]$Disinstalla, [switch]$Una, [switch]$Collega, [switch]$DaExe, [switch]$Elenco)
 
-$VERSIONE = '1.3'
+$VERSIONE = '1.4'
 $BOT_BASE = 'https://professioniethereum.michael-cerri90.workers.dev'
 $SITO_BASE = 'https://michaelcerri90-sudo.github.io/PROFESSIONI-Ethereum-'
 $ErrorActionPreference = 'Stop'
@@ -29,6 +29,7 @@ $Script = $MyInvocation.MyCommand.Path
 $CfgFile = Join-Path $Qui 'config.json'
 $StatoFile = Join-Path $Qui 'stato.json'
 $LogFile = Join-Path $Qui 'ponte.log'
+$SceltaFile = Join-Path $Qui 'scelta.json'   # quali ricettari mandare: { "Pg|Professione": true/false } (lo scrive ERT-Ponte.exe)
 $Avvio = Join-Path ([Environment]::GetFolderPath('Startup')) 'ERT-Ponte.lnk'
 $Interattivo = $Installa -or $Disinstalla -or $Una -or $Collega
 
@@ -308,23 +309,58 @@ function RicettariDa([string]$file) {
   }
   return $out.ToArray()
 }
-# quando Mastercraft.lua cambia (dopo /reload o all'uscita), manda i ricettari al bot
+function FileMastercraft($wow) {
+  $acc = Join-Path $wow 'WTF\Account'
+  if (-not (Test-Path -LiteralPath $acc)) { return @() }
+  return @(Get-ChildItem -LiteralPath $acc -Directory | ForEach-Object { Join-Path $_.FullName 'SavedVariables\Mastercraft.lua' } | Where-Object { Test-Path -LiteralPath $_ })
+}
+# scelta fatta nell'app: senza scelta si mandano tutti; con la scelta solo quelli spuntati (i nuovi aspettano la spunta)
+function Scelta { LeggiJson $SceltaFile $null }
+function Scelto($scelta, $r) {
+  if (-not $scelta) { return $true }
+  $p = $scelta.PSObject.Properties[$r.pg + '|' + $r.prof]
+  return [bool]($p -and $p.Value -eq $true)
+}
+function Nuovo($scelta, $r) { return [bool]($scelta -and -not $scelta.PSObject.Properties[$r.pg + '|' + $r.prof]) }
+# per l'app: elenco dei ricettari trovati in Mastercraft.lua (scritto in elenco.json)
+function ScriviElenco {
+  $stato = Stato
+  $wow = Wow $stato
+  $scelta = Scelta
+  $lista = @()
+  if ($wow) {
+    $lista = @(foreach ($f in (FileMastercraft $wow)) { foreach ($r in (RicettariDa $f)) {
+      [pscustomobject]@{ pg = $r.pg; prof = $r.prof; livello = $r.livello; noti = @($r.recipes | Where-Object { $_.known }).Count
+                         scelto = (Scelto $scelta $r); nuovo = (Nuovo $scelta $r) } } })
+  }
+  $out = [pscustomobject]@{ wow = $wow; scelta = [bool]$scelta; ricettari = $lista }
+  [IO.File]::WriteAllText((Join-Path $Qui 'elenco.json'), ($out | ConvertTo-Json -Depth 4), (New-Object Text.UTF8Encoding($false)))
+}
+# quando Mastercraft.lua cambia (dopo /reload o all'uscita) o cambia la scelta nell'app, manda i ricettari al bot
 function MandaRicettari($cfg, $stato, $wow, [switch]$Forza) {
   if ($cfg.ricettari -eq $false) { return $null }
-  $acc = Join-Path $wow 'WTF\Account'
-  if (-not (Test-Path -LiteralPath $acc)) { return $null }
-  $files = @(Get-ChildItem -LiteralPath $acc -Directory | ForEach-Object { Join-Path $_.FullName 'SavedVariables\Mastercraft.lua' } | Where-Object { Test-Path -LiteralPath $_ })
+  $files = FileMastercraft $wow
   if ($files.Count -eq 0) { return $null }
-  $tempo = ($files | ForEach-Object { (Get-Item -LiteralPath $_).LastWriteTimeUtc.Ticks } | Measure-Object -Maximum).Maximum
-  if (-not $Forza -and [string]$tempo -eq [string]$stato.mcTempo) { return $null }
-  $tutti = @(foreach ($f in $files) { RicettariDa $f })
+  $tempo = [string]($files | ForEach-Object { (Get-Item -LiteralPath $_).LastWriteTimeUtc.Ticks } | Measure-Object -Maximum).Maximum
+  if (Test-Path -LiteralPath $SceltaFile) { $tempo += '|' + (Get-Item -LiteralPath $SceltaFile).LastWriteTimeUtc.Ticks }
+  if (-not $Forza -and $tempo -eq [string]$stato.mcTempo) { return $null }
+  $scelta = Scelta
+  $trovati = @(foreach ($f in $files) { RicettariDa $f })
+  $tutti = @($trovati | Where-Object { Scelto $scelta $_ })
+  $nuovi = @($trovati | Where-Object { Nuovo $scelta $_ } | ForEach-Object { '{0} {1}' -f $_.pg, $_.prof })
+  if ($nuovi.Count) { Log ("ricettari nuovi non ancora scelti (spuntali in ERT-Ponte): {0}" -f ($nuovi -join ', ')) }
+  if ($tutti.Count -eq 0) {
+    $stato.mcTempo = $tempo
+    Log 'ricettari: nessuno scelto'
+    return [pscustomobject]@{ esiti = @() }
+  }
   $corpo = @{ ricettari = $tutti }
   $json = $corpo | ConvertTo-Json -Depth 8 -Compress
   $h = Hash ([Text.Encoding]::UTF8.GetBytes($json))
-  if (-not $Forza -and $h -eq $stato.mcHash) { $stato.mcTempo = [string]$tempo; return $null }
+  if (-not $Forza -and $h -eq $stato.mcHash) { $stato.mcTempo = $tempo; return $null }
   $risp = Invoke-RestMethod -Uri ($cfg.bot + '/ponte/ricettari') -Method Post -Headers @{ Authorization = 'Ponte ' + $cfg.token; 'User-Agent' = 'ERT-Ponte/' + $VERSIONE } `
     -Body ([Text.Encoding]::UTF8.GetBytes($json)) -ContentType 'application/json; charset=utf-8' -TimeoutSec 60 -UseBasicParsing
-  $stato.mcTempo = [string]$tempo; $stato.mcHash = $h
+  $stato.mcTempo = $tempo; $stato.mcHash = $h
   $cambiati = @($risp.esiti | Where-Object { $_.cambiato })
   if ($cambiati.Count) { Log ("ricettari aggiornati: {0}" -f (($cambiati | ForEach-Object { '{0} {1} ({2} ricette{3})' -f $_.pg, $_.prof, $_.noti, $(if ($_.nuovo) { ', nuovo' } else { '' }) }) -join '; ')) }
   else { Log 'ricettari: nessuna novita' }
@@ -383,6 +419,8 @@ if ($Collega) {
   return
 }
 
+if ($Elenco) { ScriviElenco; return }
+
 $cfg = Config
 if (-not $cfg -or -not $cfg.token) { Log 'manca config.json: riscarica ERT-Ponte con /raid ponte su Discord'; return }
 
@@ -406,7 +444,8 @@ if ($Installa) {
     try {
       Write-Host 'Ricettari: leggo Mastercraft.lua...'
       $r = MandaRicettari $cfg $stato $wow -Forza
-      if ($r) { Write-Host ("Ricettari sincronizzati: {0}" -f (@($r.esiti | ForEach-Object { '{0} {1}' -f $_.pg, $_.prof }) -join ', ')) -ForegroundColor Green }
+      if ($r -and @($r.esiti).Count -eq 0) { Write-Host 'Ricettari: nessuno scelto (spuntali nella lista se vuoi metterli sul sito).' }
+      elseif ($r) { Write-Host ("Ricettari sincronizzati: {0}" -f (@($r.esiti | ForEach-Object { '{0} {1}' -f $_.pg, $_.prof }) -join ', ')) -ForegroundColor Green }
       else { Write-Host 'Ricettari: Mastercraft.lua non trovato (se usi Mastercraft, apri le professioni in gioco e fai /reload).' }
     } catch { Write-Host ("Ricettari: non riuscito ({0}); riprovo da solo" -f $_.Exception.Message) -ForegroundColor DarkYellow }
   } catch {
