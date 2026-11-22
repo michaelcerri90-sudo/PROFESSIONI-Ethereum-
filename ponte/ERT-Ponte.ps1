@@ -6,15 +6,20 @@
      di cui sei referente, e le scrive in Interface\AddOns\ERT\ERT_Dati.lua (in gioco: /reload);
    - quando in gioco chiudi un appello e fai /reload (o esci), legge i risultati salvati da ERT
      (WTF\Account\*\SavedVariables\ERT.lua) e li manda al bot, che segna le persone al raid;
-   - installa l'addon ERT se manca e lo tiene aggiornato.
+   - installa l'addon ERT se manca e lo tiene aggiornato;
+   - ricettari: quando Mastercraft salva (/reload o uscita dal gioco), manda al bot le ricette dei tuoi
+     personaggi (solo ricette e livello di professione, niente oro o borse) e i ricettari sul sito si aggiornano.
+     Un alt diventa un ricettario nuovo; le richieste di craft arrivano sempre a te su Discord.
 
-  Non tocca nient'altro: legge solo ERT.lua nelle SavedVariables e scrive solo nella cartella dell'addon ERT.
+  Non tocca nient'altro: legge solo ERT.lua e Mastercraft.lua nelle SavedVariables e scrive solo nella cartella dell'addon ERT.
   File: %LOCALAPPDATA%\ERT-Ponte (config.json = la tua chiave personale, ponte.log = cosa ha fatto).
   Per toglierlo: Disinstalla.cmd nella stessa cartella.
 #>
-param([switch]$Installa, [switch]$Disinstalla, [switch]$Una)
+param([switch]$Installa, [switch]$Disinstalla, [switch]$Una, [switch]$Collega)
 
-$VERSIONE = '1.1'
+$VERSIONE = '1.2'
+$BOT_BASE = 'https://professioniethereum.michael-cerri90.workers.dev'
+$SITO_BASE = 'https://michaelcerri90-sudo.github.io/PROFESSIONI-Ethereum-'
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
@@ -25,7 +30,7 @@ $CfgFile = Join-Path $Qui 'config.json'
 $StatoFile = Join-Path $Qui 'stato.json'
 $LogFile = Join-Path $Qui 'ponte.log'
 $Avvio = Join-Path ([Environment]::GetFolderPath('Startup')) 'ERT-Ponte.lnk'
-$Interattivo = $Installa -or $Disinstalla -or $Una
+$Interattivo = $Installa -or $Disinstalla -or $Una -or $Collega
 
 function Log([string]$t) {
   try {
@@ -51,7 +56,7 @@ function Config { LeggiJson $CfgFile $null }
 function Stato {
   $s = LeggiJson $StatoFile $null
   if (-not $s) { $s = [pscustomobject]@{} }
-  foreach ($k in 'inviati', 'datiHash', 'zipHash', 'zipControllo', 'psControllo', 'wow') {
+  foreach ($k in 'inviati', 'datiHash', 'zipHash', 'zipControllo', 'psControllo', 'wow', 'mcTempo', 'mcHash') {
     if (-not ($s.PSObject.Properties.Name -contains $k)) { $s | Add-Member -NotePropertyName $k -NotePropertyValue $null }
   }
   if (-not $s.inviati) { $s.inviati = @() }
@@ -223,6 +228,109 @@ function MandaAppelli($cfg, $stato, $wow) {
   return $nuovi
 }
 
+# ------------------------------------------------------------------ ricettari da Mastercraft.lua
+# Del file (che puo' essere di vari MB) servono solo le tabelle "recipes" e "chars": le ritaglio e le leggo qui.
+$RACCOLTA = @('Herbalism', 'Skinning', 'Fishing', 'Mining', 'First Aid')
+function Ritaglia([string]$t, [string]$chiave) {
+  $m = [regex]::Match($t, '(?m)^\["' + $chiave + '"\] = \{')
+  if (-not $m.Success) { return $null }
+  $re = [regex]'\G\{(?>"(?:\\.|[^"\\])*"|[^{}"]+|\{(?<d>)|\}(?<-d>))*(?(d)(?!))\}'
+  $b = $re.Match($t, $m.Index + $m.Length - 1)
+  if ($b.Success) { return $b.Value } else { return $null }
+}
+function LuaUnesc([string]$s) {
+  if ($s.IndexOf('\') -lt 0) { return $s }
+  return [regex]::Replace($s, '\\(\d{1,3}|.)', { param($m) $c = $m.Groups[1].Value
+    if ($c -match '^\d+$') { [string][char][int]$c } elseif ($c -eq 'n') { "`n" } elseif ($c -eq 't') { "`t" } else { $c } })
+}
+function LuaLeggi([string]$s) {
+  $script:lt = @(foreach ($m in [regex]::Matches($s, '"(?:\\.|[^"\\])*"|--[^\n]*|[{}\[\]=,;]|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?|[A-Za-z_]\w*')) { if (-not $m.Value.StartsWith('--')) { $m.Value } })
+  $script:lk = 0
+  return (LuaValore)
+}
+function LuaValore {
+  $t = $script:lt[$script:lk]; $script:lk++
+  if ($t -eq '{') { return (LuaTabella) }
+  if ($t[0] -eq '"') { return (LuaUnesc $t.Substring(1, $t.Length - 2)) }
+  if ($t -eq 'true') { return $true }
+  if ($t -eq 'false') { return $false }
+  if ($t -eq 'nil') { return $null }
+  return [double]::Parse($t, [Globalization.CultureInfo]::InvariantCulture)
+}
+function LuaTabella {
+  $h = @{}; $pos = 1
+  while ($script:lk -lt $script:lt.Count) {
+    $t = $script:lt[$script:lk]
+    if ($t -eq '}') { $script:lk++; return $h }
+    if ($t -eq ',' -or $t -eq ';') { $script:lk++; continue }
+    if ($t -eq '[') { $script:lk++; $k = LuaValore; $script:lk += 2; $h[$k] = (LuaValore); continue }
+    if ($script:lt[$script:lk + 1] -eq '=' -and $t -match '^[A-Za-z_]') { $script:lk += 2; $h[$t] = (LuaValore); continue }
+    $h[[double]$pos] = (LuaValore); $pos++
+  }
+  return $h
+}
+function Valori($t) {
+  if (-not ($t -is [hashtable])) { return @() }
+  return @($t.Keys | Sort-Object { [double]$_ } | ForEach-Object { $t[$_] } | Where-Object { $_ -ne $null })
+}
+function Num($h, [string]$k) { if ($h -is [hashtable] -and $h.ContainsKey($k) -and $h[$k] -ne $null) { return $h[$k] } return $null }
+# dal file alle voci da mandare: una per personaggio e professione di artigianato (come la pagina "crea" del sito)
+function RicettariDa([string]$file) {
+  $t = [IO.File]::ReadAllText($file)
+  $rt = Ritaglia $t 'recipes'
+  if (-not $rt) { return @() }
+  $ricette = LuaLeggi $rt
+  $ct = Ritaglia $t 'chars'
+  $chars = if ($ct) { LuaLeggi $ct } else { @{} }
+  $out = New-Object System.Collections.Generic.List[object]
+  foreach ($guid in $ricette.Keys) {
+    $ch = $chars[$guid]
+    $nome = if ($ch -is [hashtable] -and $ch['name']) { [string]$ch['name'] } else { $null }
+    if (-not $nome) { continue }
+    $profs = $ricette[$guid]
+    if (-not ($profs -is [hashtable])) { continue }
+    foreach ($prof in $profs.Keys) {
+      if ($RACCOLTA -contains $prof) { continue }
+      $v = $profs[$prof]
+      $lista = Valori $v['list']
+      if ($lista.Count -eq 0) { continue }
+      $livello = ''
+      foreach ($p in (Valori $ch['professions'])) { if ($p['name'] -eq $prof) { $livello = '{0}/{1}' -f [int]$p['skill'], [int]$p['max'] } }
+      $rs = @(foreach ($r in $lista) {
+        $cat = if ($r['category']) { $r['category'] } elseif ($r['group']) { $r['group'] } else { 'Ricette' }
+        $q = Num $r 'outputQty'; if (-not $q) { $q = 1 }
+        @{ name = [string]$r['name']; cat = [string]$cat; known = ($r['learned'] -ne $false); diff = [string]$r['diff']; qty = [int]$q
+           reag = @(foreach ($g in (Valori $r['reagents'])) { $gq = Num $g 'qty'; if (-not $gq) { $gq = 1 }; @{ id = [int]$g['itemID']; q = [int]$gq } }) }
+      })
+      $sc = Num $v 'scanned'; if (-not $sc) { $sc = 0 }
+      $out.Add(@{ pg = $nome; prof = [string]$prof; livello = $livello; scanned = [int64]$sc; recipes = $rs })
+    }
+  }
+  return $out.ToArray()
+}
+# quando Mastercraft.lua cambia (dopo /reload o all'uscita), manda i ricettari al bot
+function MandaRicettari($cfg, $stato, $wow, [switch]$Forza) {
+  if ($cfg.ricettari -eq $false) { return $null }
+  $acc = Join-Path $wow 'WTF\Account'
+  if (-not (Test-Path -LiteralPath $acc)) { return $null }
+  $files = @(Get-ChildItem -LiteralPath $acc -Directory | ForEach-Object { Join-Path $_.FullName 'SavedVariables\Mastercraft.lua' } | Where-Object { Test-Path -LiteralPath $_ })
+  if ($files.Count -eq 0) { return $null }
+  $tempo = ($files | ForEach-Object { (Get-Item -LiteralPath $_).LastWriteTimeUtc.Ticks } | Measure-Object -Maximum).Maximum
+  if (-not $Forza -and [string]$tempo -eq [string]$stato.mcTempo) { return $null }
+  $tutti = @(foreach ($f in $files) { RicettariDa $f })
+  $corpo = @{ ricettari = $tutti }
+  $json = $corpo | ConvertTo-Json -Depth 8 -Compress
+  $h = Hash ([Text.Encoding]::UTF8.GetBytes($json))
+  if (-not $Forza -and $h -eq $stato.mcHash) { $stato.mcTempo = [string]$tempo; return $null }
+  $risp = Invoke-RestMethod -Uri ($cfg.bot + '/ponte/ricettari') -Method Post -Headers @{ Authorization = 'Ponte ' + $cfg.token; 'User-Agent' = 'ERT-Ponte/' + $VERSIONE } `
+    -Body ([Text.Encoding]::UTF8.GetBytes($json)) -ContentType 'application/json; charset=utf-8' -TimeoutSec 60 -UseBasicParsing
+  $stato.mcTempo = [string]$tempo; $stato.mcHash = $h
+  $cambiati = @($risp.esiti | Where-Object { $_.cambiato })
+  if ($cambiati.Count) { Log ("ricettari aggiornati: {0}" -f (($cambiati | ForEach-Object { '{0} {1} ({2} ricette{3})' -f $_.pg, $_.prof, $_.noti, $(if ($_.nuovo) { ', nuovo' } else { '' }) }) -join '; ')) }
+  else { Log 'ricettari: nessuna novita' }
+  return $risp
+}
+
 # ------------------------------------------------------------------ installazione
 function CreaAvvio {
   $sh = New-Object -ComObject WScript.Shell
@@ -255,6 +363,26 @@ if ($Disinstalla) {
   return
 }
 
+if ($Collega) {
+  # installazione da ZIP: la chiave personale arriva dal link del bottone "Scarica ERT-Ponte" (/raid ponte su Discord)
+  Write-Host ''
+  Write-Host '=== ERT-Ponte: collegamento a Discord ===' -ForegroundColor Yellow
+  Write-Host 'Su Discord scrivi /raid ponte, tieni premuto (o clic destro) sul bottone "Scarica ERT-Ponte",'
+  Write-Host 'scegli "Copia link" e incollalo qui sotto (clic destro per incollare), poi Invio.'
+  for ($tentativo = 0; $tentativo -lt 3; $tentativo++) {
+    $link = Read-Host 'Link'
+    $c = [regex]::Match([string]$link, '[?&]c=(\w+)').Groups[1].Value
+    if (-not $c) { Write-Host 'Non vedo il codice nel link: riprova.' -ForegroundColor Red; continue }
+    try {
+      $k = Invoke-RestMethod -Uri ($BOT_BASE + '/ponte/chiave?c=' + $c) -TimeoutSec 30 -UseBasicParsing
+      ScriviJson $CfgFile @{ token = $k.token; bot = $k.bot; sito = $k.sito }
+      Write-Host 'Collegato.' -ForegroundColor Green
+      return
+    } catch { Write-Host 'Link scaduto o non valido: rifai /raid ponte su Discord e riprova.' -ForegroundColor Red }
+  }
+  return
+}
+
 $cfg = Config
 if (-not $cfg -or -not $cfg.token) { Log 'manca config.json: riscarica ERT-Ponte con /raid ponte su Discord'; return }
 
@@ -275,6 +403,12 @@ if ($Installa) {
     if (-not $pg) { $pg = 'nessuno: registrali con /raid personaggi' }
     Write-Host ("Collegato a Discord come {0} (personaggi: {1})" -f $d.nome, $pg) -ForegroundColor Green
     Write-Host ("Raid in programma: {0}; dove sei referente: {1}" -f @($d.eventi).Count, @($d.righe).Count)
+    try {
+      Write-Host 'Ricettari: leggo Mastercraft.lua...'
+      $r = MandaRicettari $cfg $stato $wow -Forza
+      if ($r) { Write-Host ("Ricettari sincronizzati: {0}" -f (@($r.esiti | ForEach-Object { '{0} {1}' -f $_.pg, $_.prof }) -join ', ')) -ForegroundColor Green }
+      else { Write-Host 'Ricettari: Mastercraft.lua non trovato (se usi Mastercraft, apri le professioni in gioco e fai /reload).' }
+    } catch { Write-Host ("Ricettari: non riuscito ({0}); riprovo da solo" -f $_.Exception.Message) -ForegroundColor DarkYellow }
   } catch {
     Write-Host ("Il bot non risponde: {0}" -f $_.Exception.Message) -ForegroundColor Red
     Write-Host "Se dice 401 riscarica ERT-Ponte con /raid ponte su Discord."
@@ -289,6 +423,7 @@ if ($Installa) {
   Write-Host ''
   Write-Host 'Fatto. ERT-Ponte ora lavora in background e parte da solo a ogni accensione del PC.' -ForegroundColor Green
   Write-Host 'In gioco: /reload per vedere i raid nuovi; dopo un appello, /reload per mandarlo a Discord.'
+  Write-Host 'Ricettari: dopo aver aperto le professioni in gioco, /reload (o esci) e il sito si aggiorna da solo.'
   Write-Host "Per toglierlo: Disinstalla.cmd in $Qui"
   return
 }
@@ -323,6 +458,7 @@ while ($true) {
         ScriviDati $cfg $stato $wow | Out-Null
       }
       $eraAperto = $aperto
+      MandaRicettari $cfg $stato $wow | Out-Null
       if ($adesso -ge $prossimoAddon) {
         $e = AggiornaAddon $cfg $stato $wow
         if ($e -ne 'uguale') { Log "addon ERT $e" }
@@ -332,7 +468,9 @@ while ($true) {
         # nuova versione di ERT-Ponte: la scarica, partira' alla prossima accensione
         $nuovo = (Invoke-WebRequest -Uri ($cfg.sito + '/ponte/ERT-Ponte.ps1') -UseBasicParsing -TimeoutSec 30).Content
         if ($nuovo -is [byte[]]) { $nuovo = [Text.Encoding]::UTF8.GetString($nuovo) }
-        if ($nuovo -match 'ERT-Ponte' -and $nuovo -ne [IO.File]::ReadAllText($Script)) {
+        # solo se la versione sul sito e' piu' nuova di questa (mai tornare indietro)
+        $vSito = [regex]::Match($nuovo, "\`$VERSIONE = '([\d.]+)'").Groups[1].Value
+        if ($vSito -and ([version]$vSito -gt [version]$VERSIONE) -and $nuovo -match 'ERT-Ponte') {
           [IO.File]::WriteAllText($Script, $nuovo, (New-Object Text.UTF8Encoding($false)))
           Log 'scaricata una versione nuova di ERT-Ponte: partira'' alla prossima accensione'
         }

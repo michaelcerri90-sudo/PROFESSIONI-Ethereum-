@@ -46,17 +46,25 @@ input[type=text],select{font:inherit;color:var(--ink);background:var(--bg);borde
 .esito{padding:10px 12px;border-radius:4px;border:1px solid var(--line);background:var(--bg);overflow-wrap:anywhere}
 .esito.ok{border-color:var(--ok)} .esito.bad{border-color:var(--bad);color:var(--bad)}
 .esito a{color:var(--gold)}
+.ultimo{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+[hidden]{display:none!important}
+.scelta .tipo{flex:none}
+label.scelta{flex-direction:row;color:var(--ink);font-size:16px}
+.scelta input{width:18px;height:18px;accent-color:var(--gold);flex:none}
+.scelta .tipo{font-size:12px;font-weight:700;border-radius:10px;padding:1px 8px;border:1px solid var(--line);color:var(--muted);white-space:nowrap}
+.scelta .tipo.agg{border-color:var(--ok);color:var(--ok)}
 :focus-visible{outline:2px solid var(--gold);outline-offset:2px}
 </style>
 
 <div class="wrap">
-  <h1><small>Gilda Ethereum · WoW: Forever</small>Crea il tuo ricettario</h1>
+  <h1><small>Gilda Ethereum · WoW: Forever</small><span id="titolo">Crea il tuo ricettario</span></h1>
   <p id="saluto" class="muted"></p>
 
   <section class="step" id="s1">
     <h2><span class="num">1</span>Carica Mastercraft.lua</h2>
     <p class="muted">Prima, in gioco: apri la finestra di ogni professione da mostrare e scrivi <code>/reload</code>. Il file e' in<br>
       <code>World of Warcraft\_forever_\WTF\Account\NOME_ACCOUNT\SavedVariables\Mastercraft.lua</code></p>
+    <div class="ultimo" id="ultimo" hidden><button class="btn" type="button" id="ricarica">Ricarica l'ultimo file</button><span class="muted" id="ultimoNome"></span></div>
     <label class="drop" id="drop" for="file">
       <input type="file" id="file" accept=".lua">
       <b>Scegli il file o trascinalo qui</b>
@@ -68,10 +76,10 @@ input[type=text],select{font:inherit;color:var(--ink);background:var(--bg);borde
   <section class="step" id="s2" aria-disabled="true">
     <h2><span class="num">2</span>Scegli personaggio e professione</h2>
     <div class="scelte" id="scelte"></div>
-    <label>Nome del personaggio in gioco (obbligatorio)
+    <label id="boxPg">Nome del personaggio in gioco (obbligatorio)
       <input type="text" id="pgIn" maxlength="24" required placeholder="es. Cornelius" autocomplete="off">
     </label>
-    <label>Descrizione del personaggio (facoltativa)
+    <label id="boxSub">Descrizione del personaggio (facoltativa)
       <input type="text" id="sub" maxlength="40" placeholder="es. Orco guerriero">
     </label>
   </section>
@@ -96,6 +104,16 @@ const RACCOLTA = ["Herbalism", "Skinning", "Fishing", "Mining", "First Aid"];
 // --- link personale dal bot ---
 const prendiToken = s => (String(s || "").match(/[#?&]t=([\w.-]+)/) || [])[1] || "";
 let token = prendiToken(location.hash) || prendiToken(location.search);
+// /ricettario aggiorna: i ricettari che ha gia' si aggiornano tutti insieme, senza riscrivere nomi e descrizioni
+const AGGIORNA = /[#&]a=1/.test(location.hash);
+let MIEI = [];
+const chiaveDi = (pg, prof) => (pg + "|" + prof).toLowerCase();
+async function caricaMiei() {
+  if (!token) return;
+  try { const r = await fetch(`${RELAY}/ricettari-miei?t=${encodeURIComponent(token)}`); if (r.ok) MIEI = (await r.json()).ricettari || []; } catch (e) {}
+}
+if (AGGIORNA) { document.title = "Aggiorna i tuoi ricettari"; $("titolo").textContent = "Aggiorna i tuoi ricettari"; }
+const miei = caricaMiei();
 let nomeDiscord = "";
 function saluta() {
   nomeDiscord = "";
@@ -204,21 +222,46 @@ function analizza(testo) {
 }
 
 function mostraScelte() {
+  if (AGGIORNA) return mostraScelteAggiorna();
   $("scelte").innerHTML = opzioni.map((o, k) => `<label class="scelta"><input type="radio" name="scelta" value="${k}" ${k === 0 ? "checked" : ""}>
     <span><b>${esc(o.pg)}</b> · ${esc(o.prof)}${o.livello ? " " + esc(o.livello) : ""}${o.realm ? `<br><span class="muted">${esc(o.realm)}</span>` : ""}</span>
     <em>${o.noti}/${o.totale} ricette</em></label>`).join("");
   $("s2").setAttribute("aria-disabled", "false");
   $("s3").setAttribute("aria-disabled", "false");
-  $("pgIn").value = opzioni[0] ? opzioni[0].pg : "";
+  if (opzioni[0]) compila(opzioni[0]);
 }
+function compila(o) {
+  const m = MIEI.find(x => chiaveDi(x.pg, x.prof) === chiaveDi(o.pg, o.prof)) || MIEI.find(x => x.pg.toLowerCase() === o.pg.toLowerCase());
+  $("pgIn").value = m ? m.pg : o.pg;
+  if (m && m.sub && !$("sub").value) $("sub").value = m.sub;
+}
+// aggiorna: una casella per personaggio e professione; quelli gia' pubblicati sono spuntati e tengono nome e descrizione
+function mostraScelteAggiorna() {
+  for (const o of opzioni) {
+    const m = MIEI.find(x => chiaveDi(x.pg, x.prof) === chiaveDi(o.pg, o.prof));
+    o.gia = m || null;
+  }
+  opzioni.sort((a, b) => !!b.gia - !!a.gia || b.noti - a.noti);
+  $("scelte").innerHTML = opzioni.map((o, k) => `<label class="scelta"><input type="checkbox" name="agg" value="${k}" ${o.gia ? "checked" : ""}>
+    <span><b>${esc(o.gia ? o.gia.pg : o.pg)}</b> · ${esc(o.prof)}${o.livello ? " " + esc(o.livello) : ""}${o.gia && o.gia.sub ? `<br><span class="muted">${esc(o.gia.sub)}</span>` : ""}</span>
+    <span class="tipo ${o.gia ? "agg" : ""}">${o.gia ? "aggiorna" : "nuovo"}</span>
+    <em>${o.noti}/${o.totale}</em></label>`).join("");
+  $("boxPg").hidden = true; $("boxSub").hidden = true;
+  $("pubblica").textContent = "Aggiorna i ricettari scelti";
+  $("s2").querySelector("h2").innerHTML = `<span class="num">2</span>Scegli cosa aggiornare`;
+  $("s2").setAttribute("aria-disabled", "false");
+  $("s3").setAttribute("aria-disabled", "false");
+}
+
 // il nome si propone dal file quando cambi scelta, ma si puo' correggere
 document.addEventListener("change", ev => {
-  if (ev.target.name === "scelta") { const o = opzioni[+ev.target.value]; if (o) $("pgIn").value = o.pg; }
+  if (ev.target.name === "scelta") { const o = opzioni[+ev.target.value]; if (o) compila(o); }
 });
 
 async function caricaFile(f) {
   const e = $("esito1"); e.hidden = false; e.className = "esito"; e.textContent = "Lettura del file...";
   try {
+    await miei;
     opzioni = analizza(await f.text());
     if (!opzioni.length) throw new Error("nel file non ci sono professioni salvate: in gioco apri la finestra della professione e fai /reload");
     e.className = "esito ok";
@@ -230,12 +273,64 @@ async function caricaFile(f) {
 }
 
 $("file").addEventListener("change", ev => { if (ev.target.files[0]) caricaFile(ev.target.files[0]); });
+
+// Ultimo Mastercraft.lua usato: su Chrome/Edge da PC la pagina se lo ricorda (si apre gia' nella sua cartella, o si ricarica con un tocco)
+const db = () => new Promise((ok, ko) => { const r = indexedDB.open("ricettario", 1); r.onupgradeneeded = () => r.result.createObjectStore("file"); r.onsuccess = () => ok(r.result); r.onerror = () => ko(r.error); });
+async function salvaManiglia(h) { try { const d = await db(); d.transaction("file", "readwrite").objectStore("file").put(h, "mastercraft"); } catch (e) {} }
+async function leggiManiglia() { try { const d = await db(); return await new Promise(ok => { const q = d.transaction("file").objectStore("file").get("mastercraft"); q.onsuccess = () => ok(q.result || null); q.onerror = () => ok(null); }); } catch (e) { return null; } }
+if (window.showOpenFilePicker) {
+  $("drop").addEventListener("click", async ev => {
+    ev.preventDefault();
+    try {
+      const [h] = await window.showOpenFilePicker({ id: "mastercraft", startIn: (await leggiManiglia()) || "documents", types: [{ description: "Mastercraft.lua", accept: { "text/plain": [".lua"] } }] });
+      await salvaManiglia(h);
+      caricaFile(await h.getFile());
+    } catch (e) { if (e.name !== "AbortError") $("file").click(); }
+  });
+  leggiManiglia().then(h => {
+    if (!h) return;
+    $("ultimo").hidden = false;
+    $("ultimoNome").textContent = `${h.name} (l'ultimo che hai scelto)`;
+    $("ricarica").onclick = async () => {
+      try {
+        if ((await h.queryPermission({ mode: "read" })) !== "granted" && (await h.requestPermission({ mode: "read" })) !== "granted") throw new Error("permesso negato");
+        caricaFile(await h.getFile());
+      } catch (err) { const e = $("esito1"); e.hidden = false; e.className = "esito bad"; e.textContent = "Non riesco a riaprire il file: sceglilo di nuovo qui sotto."; }
+    };
+  });
+}
 const drop = $("drop");
 drop.addEventListener("dragover", ev => { ev.preventDefault(); drop.classList.add("over"); });
 drop.addEventListener("dragleave", () => drop.classList.remove("over"));
 drop.addEventListener("drop", ev => { ev.preventDefault(); drop.classList.remove("over"); if (ev.dataTransfer.files[0]) caricaFile(ev.dataTransfer.files[0]); });
 
+const ricetteDi = o => o.lista.filter(Boolean).map(r => ({
+  name: r.name, cat: r.category || r.group || "Ricette", known: r.learned !== false, diff: r.diff || "", qty: r.outputQty || 1,
+  reag: valori(r.reagents).filter(Boolean).map(g => ({ id: g.itemID, q: g.qty || 1 })),
+}));
+async function aggiornaTutti() {
+  const e = $("esito3"), btn = $("pubblica");
+  const scelti = [...document.querySelectorAll('input[name="agg"]:checked')].map(x => opzioni[+x.value]);
+  if (!scelti.length) { e.hidden = false; e.className = "esito bad"; e.textContent = "Spunta almeno un ricettario."; return; }
+  btn.disabled = true; e.hidden = false; e.className = "esito"; e.textContent = "Aggiornamento...";
+  const fatti = [], errori = [];
+  for (const o of scelti) {
+    try {
+      const res = await fetch(RELAY + "/pubblica", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token, pg: o.gia ? o.gia.pg : o.pg, prof: o.prof, livello: o.livello, scanned: o.scanned, recipes: ricetteDi(o) }) });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.errore || res.status);
+      fatti.push(`${o.gia ? o.gia.pg : o.pg} · ${o.prof}`);
+    } catch (err) { errori.push(`${o.pg} · ${o.prof}: ${err.message}`); }
+  }
+  e.className = "esito " + (errori.length ? "bad" : "ok");
+  e.innerHTML = (fatti.length ? `Aggiornati: ${fatti.map(esc).join(", ")}.` : "") + (errori.length ? ` Non riusciti: ${errori.map(esc).join("; ")}.` : "");
+  await caricaMiei();
+  btn.disabled = !token;
+}
+
 $("pubblica").addEventListener("click", async () => {
+  if (AGGIORNA) return aggiornaTutti();
   const e = $("esito3"), btn = $("pubblica");
   const k = +(document.querySelector('input[name="scelta"]:checked') || {}).value;
   const o = opzioni[k];
@@ -246,10 +341,7 @@ $("pubblica").addEventListener("click", async () => {
     $("pgIn").focus();
     return;
   }
-  const recipes = o.lista.filter(Boolean).map(r => ({
-    name: r.name, cat: r.category || r.group || "Ricette", known: r.learned !== false, diff: r.diff || "", qty: r.outputQty || 1,
-    reag: valori(r.reagents).filter(Boolean).map(g => ({ id: g.itemID, q: g.qty || 1 })),
-  }));
+  const recipes = ricetteDi(o);
   btn.disabled = true; e.hidden = false; e.className = "esito"; e.textContent = "Pubblicazione...";
   try {
     const res = await fetch(RELAY + "/pubblica", { method: "POST", headers: { "Content-Type": "application/json" },

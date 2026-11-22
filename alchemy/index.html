@@ -136,6 +136,11 @@ footer{color:var(--muted);font-size:13px}
 <style>
 /* in piu' per la pagina di gilda: chi sa fare la ricetta e scelta dell'artigiano */
 .row .chi{font-size:12px;color:var(--muted);white-space:nowrap;max-width:45%;overflow:hidden;text-overflow:ellipsis}
+/* quanti artigiani la sanno fare; se nessuno, il bottone Richiedi */
+.row .num{min-width:26px;text-align:center;font-variant-numeric:tabular-nums;font-weight:700;color:var(--gold);border:1px solid var(--line);border-radius:10px;padding:0 7px;font-size:12px}
+.row .rich{font-size:12px;font-weight:700;color:var(--gold);border:1px solid var(--gold);border-radius:10px;padding:1px 9px;white-space:nowrap;cursor:pointer}
+.row .rich:hover{background:var(--gold-soft)}
+.fonte{padding:8px 10px;border:1px solid var(--line);border-radius:4px;background:var(--bg);white-space:pre-line;font-size:14px}
 .row .nm{color:var(--ink)}
 .artigiani{display:grid;gap:6px}
 .artigiano{display:flex;gap:10px;align-items:center;padding:7px 10px;border:1px solid var(--line);border-radius:4px;background:var(--bg);cursor:pointer;min-width:0}
@@ -258,8 +263,9 @@ function renderList() {
   $("list").innerHTML = ORDINE.filter(c => by[c]).map(c => {
     const l = by[c].sort((a, b) => ((b.ri && b.ri.s) || 0) - ((a.ri && a.ri.s) || 0) || a.name.localeCompare(b.name));
     return `<section class="group"><h2>${esc(CAT[c] || c)}<span>${l.length}</span></h2>` + l.map(r => {
-      const chi = r.chi.length ? (r.chi.length === 1 ? r.chi[0].pg : `${r.chi[0].pg} +${r.chi.length - 1}`) : "nessuno";
-      return `<button class="row${r.chi.length ? "" : " unk"}" type="button" data-s="${r.slug}" aria-current="${state.sel === r.slug}">${icona(r.cat)}<span class="nm q${r.q}">${esc(r.name)}</span><span class="chi">${esc(chi)}</span></button>`;
+      // a destra: quanti artigiani la sanno fare, oppure "Richiedi" se nessuno
+      const chi = r.chi.length ? `<span class="num" aria-label="${r.chi.length} artigiani">${r.chi.length}</span>` : `<span class="rich" data-rich="${r.slug}">Richiedi</span>`;
+      return `<button class="row${r.chi.length ? "" : " unk"}" type="button" data-s="${r.slug}" aria-current="${state.sel === r.slug}">${icona(r.cat)}<span class="nm q${r.q}">${esc(r.name)}</span>${chi}</button>`;
     }).join("") + `</section>`;
   }).join("");
 }
@@ -281,7 +287,8 @@ function renderDetail() {
   if (!r.chi.some(a => a.id === state.a)) state.a = r.chi[0] ? r.chi[0].id : null;
   const scelta = r.chi.find(a => a.id === state.a);
   const tt = `<div class="tt"><span class="tn q${r.q}">${esc(r.name)}</span>${r.fx.length ? r.fx.map(f => `<span class="${f[0]}">${esc(f[1])}</span>`).join("") : `<span class="vuoto">Nessun effetto da mostrare.</span>`}</div>`;
-  const chi = r.chi.length === 0 ? `<p class="note">Nella gilda nessuno la sa fare ancora.</p>` :
+  const fonte = (r.ri && (r.ri.d || r.ri.w)) || "";
+  const chi = r.chi.length === 0 ? `<p class="note">Nella gilda nessuno la sa fare ancora.</p>${fonte ? `<div class="label" style="margin-top:8px">Come si impara</div><div class="fonte">${esc(fonte)}</div>` : ""}` :
     r.chi.length === 1 ? `<div class="unico">La richiesta va a <b>${esc(r.chi[0].pg)}</b>${r.chi[0].nome ? ` (Discord: ${esc(r.chi[0].nome)})` : ""}, l'unico che la sa fare.</div>` :
     `<div class="artigiani" role="radiogroup" aria-label="A chi chiedere">` + r.chi.map(a => `<label class="artigiano"><input type="radio" name="art" value="${esc(a.id)}" ${a.id === state.a ? "checked" : ""}>
       <span><b>${esc(a.pg)}</b>${a.sub ? ` · ${esc(a.sub)}` : ""}</span><em>${esc(a.nome || "")}${a.livello ? " · " + esc(a.livello) : ""}</em></label>`).join("") + `</div>`;
@@ -299,7 +306,11 @@ function renderDetail() {
       <input class="search" id="chiIn" type="text" maxlength="40" placeholder="Il tuo nome in gioco (obbligatorio)" required value="${esc(state.chi)}" aria-label="Il tuo nome in gioco">
       <button class="copy" type="button" id="sendBtn">Invia richiesta</button></div>
       <textarea id="reqText" readonly>${esc(testoRichiesta(r))}</textarea>
-      <div class="note" id="copyNote">La richiesta arriva in privato su Discord a <b>${esc(scelta.nome || scelta.pg)}</b> (${esc(scelta.pg)}).</div></div>` : ""}`;
+      <div class="note" id="copyNote">La richiesta arriva in privato su Discord a <b>${esc(scelta.nome || scelta.pg)}</b> (${esc(scelta.pg)}).</div></div>` : ""}
+    ${!r.chi.length ? `<div class="req"><div class="label">Richiedi questa ricetta</div>
+      <div class="line"><input class="search" id="chiIn" type="text" maxlength="40" placeholder="Il tuo nome in gioco (obbligatorio)" required value="${esc(state.chi)}" aria-label="Il tuo nome in gioco">
+      <button class="copy" type="button" id="richBtn">Richiedi</button></div>
+      <div class="note" id="copyNote">Arriva in privato su Discord a tutti gli artigiani di ${esc(PROF)} della gilda, con chi la chiede e come si impara.</div></div>` : ""}`;
 }
 
 function render() {
@@ -313,6 +324,27 @@ function seleziona(s, scrivi) {
   if (r && state.f !== "all" && (state.f === "known") !== (r.chi.length > 0)) state.f = "all";
   if (scrivi && s) { try { history.replaceState(null, "", "#" + s); } catch (e) {} }
   render();
+}
+
+// nessuno la sa fare: avviso a tutti gli artigiani della professione
+async function richiedi(btn) {
+  const note = $("copyNote"), r = RICETTE.find(x => x.slug === state.sel);
+  const chi = ($("chiIn").value || "").trim().replace(/[@*_`~|<>]/g, "");
+  if (!r) return;
+  if (!chi) { note.textContent = "Scrivi il tuo nome in gioco: senza, la richiesta non parte."; $("chiIn").focus(); return; }
+  state.chi = chi; try { localStorage.setItem("ricettario-chi", chi); } catch (e) {}
+  btn.disabled = true; note.textContent = "Invio in corso...";
+  try {
+    const res = await fetch(RELAY + "/richiesta-ricetta", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chi, prof: PROF, ricetta: r.name }) });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(d.errore || res.status);
+    note.textContent = d.gia ? `Questa ricetta l'ha gia' chiesta ${d.gia} nelle ultime 24 ore: gli artigiani sono gia' avvisati.`
+      : `Richiesta inviata a ${d.avvisati} ${d.avvisati === 1 ? "artigiano" : "artigiani"} di ${PROF}.`;
+  } catch (err) {
+    note.textContent = String(err.message) === "429" ? "Hai appena inviato una richiesta: aspetta 20 secondi e riprova." : `Invio non riuscito (${err.message}). Riprova tra poco.`;
+  }
+  btn.disabled = false;
 }
 
 async function invia(btn) {
@@ -336,6 +368,8 @@ async function invia(btn) {
 }
 
 document.addEventListener("click", e => {
+  const ri = e.target.closest("[data-rich]");
+  if (ri) { seleziona(ri.dataset.rich, true); const c = $("chiIn"); if (c) c.focus(); return; }
   const t = e.target.closest("button"); if (!t) return;
   if (t.dataset.f) { state.f = t.dataset.f; render(); }
   else if (t.classList.contains("chip")) { state.cat = t.dataset.c || null; renderChips(); renderList(); }
@@ -344,6 +378,7 @@ document.addEventListener("click", e => {
   else if (t.id === "closeD") { state.sel = null; renderDetail(); renderList(); }
   else if (t.id === "plus" || t.id === "minus") { state.qty = Math.min(100, Math.max(1, state.qty + (t.id === "plus" ? 1 : -1))); renderDetail(); }
   else if (t.id === "sendBtn") invia(t);
+  else if (t.id === "richBtn") richiedi(t);
 });
 document.addEventListener("change", e => {
   if (e.target.id === "qtyIn") { state.qty = Math.min(100, Math.max(1, parseInt(e.target.value, 10) || 1)); renderDetail(); }
@@ -357,7 +392,7 @@ window.addEventListener("hashchange", () => { const h = location.hash.slice(1); 
   try {
     const [p, mc] = await Promise.all([
       fetch(RELAY + "/professione?prof=" + encodeURIComponent(PROF)).then(r => r.ok ? r.json() : Promise.reject(r.status)),
-      fetch("../dati/mastercraft.json?v=8f58773565").then(r => r.json()),
+      fetch("../dati/mastercraft.json?v=1c79355958").then(r => r.json()),
     ]);
     ARTIGIANI = p.artigiani || [];
     costruisci(ARTIGIANI, mc);
