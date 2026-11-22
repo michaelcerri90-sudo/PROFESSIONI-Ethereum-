@@ -2,10 +2,11 @@
   ERT-Ponte - collega l'addon ERT (Ethereum Raid Tools) al bot Discord della gilda.
 
   Cosa fa, da solo:
-   - quando WoW e' aperto, ogni 3 minuti chiede al bot i raid in programma e le righe dei raid
-     di cui sei referente, e le scrive in Interface\AddOns\ERT\ERT_Dati.lua (in gioco: /reload);
-   - quando in gioco chiudi un appello e fai /reload (o esci), legge i risultati salvati da ERT
-     (WTF\Account\*\SavedVariables\ERT.lua) e li manda al bot, che segna le persone al raid;
+   - quando parte (accensione del PC), quando apri WoW e quando premi "Sincronizza ora" in ERT-Ponte.exe
+     chiede al bot i raid in programma e le righe dei raid di cui sei referente, e le scrive in
+     Interface\AddOns\ERT\ERT_Dati.lua (in gioco: /reload). Niente controlli periodici col bot;
+   - quando in gioco chiudi un appello (o premi "Contatta su Discord") e fai /reload (o esci), legge
+     quello che ERT ha salvato (WTF\Account\*\SavedVariables\ERT.lua) e lo manda al bot;
    - installa l'addon ERT se manca e lo tiene aggiornato;
    - ricettari: quando Mastercraft salva (/reload o uscita dal gioco), manda al bot le ricette dei tuoi
      personaggi (solo ricette e livello di professione, niente oro o borse) e i ricettari sul sito si aggiornano.
@@ -17,7 +18,7 @@
 #>
 param([switch]$Installa, [switch]$Disinstalla, [switch]$Una, [switch]$Collega, [switch]$DaExe, [switch]$Elenco)
 
-$VERSIONE = '1.4'
+$VERSIONE = '1.5'
 $BOT_BASE = 'https://professioniethereum.michael-cerri90.workers.dev'
 $SITO_BASE = 'https://michaelcerri90-sudo.github.io/PROFESSIONI-Ethereum-'
 $ErrorActionPreference = 'Stop'
@@ -29,6 +30,8 @@ $Script = $MyInvocation.MyCommand.Path
 $CfgFile = Join-Path $Qui 'config.json'
 $StatoFile = Join-Path $Qui 'stato.json'
 $LogFile = Join-Path $Qui 'ponte.log'
+$Richiesta = Join-Path $Qui 'sincronizza.txt'   # lo crea ERT-Ponte.exe col bottone "Sincronizza ora"
+$Esito = Join-Path $Qui 'sincronizzato.txt'     # la risposta per ERT-Ponte.exe
 $SceltaFile = Join-Path $Qui 'scelta.json'   # quali ricettari mandare: { "Pg|Professione": true/false } (lo scrive ERT-Ponte.exe)
 $Avvio = Join-Path ([Environment]::GetFolderPath('Startup')) 'ERT-Ponte.lnk'
 $Interattivo = $Installa -or $Disinstalla -or $Una -or $Collega
@@ -181,6 +184,12 @@ function TestoDati($d, $stato) {
     $l.Add('    { id = ' + (LuaStr $e.id) + ', raids = { ' + ($raids -join ', ') + ' } },')
   }
   $l.Add('  },')
+  # versione di tutti i raid pubblicati: ERT la passa in gilda ai referenti ("aggiornato" / "non importato")
+  $l.Add('  tutti = {')
+  foreach ($x in @($d.tutti)) {
+    if ($x) { $l.Add('    { id = ' + (LuaStr $x.id) + ', ev = ' + (LuaStr $x.ev) + ', nome = ' + (LuaStr $x.nome) + ', refs = ' + (LuaStr $x.refs) + ', v = ' + (LuaStr $x.v) + ', ts = ' + (LuaNum $x.ts) + ' },') }
+  }
+  $l.Add('  },')
   $l.Add('  inviati = { ' + ((@($stato.inviati) | ForEach-Object { LuaStr $_ }) -join ', ') + ' },')
   $l.Add('  annullati = { ' + ((@($d.annullati) | Where-Object { $_ } | ForEach-Object { LuaStr $_ }) -join ', ') + ' },')
   return ($l -join "`n")
@@ -208,7 +217,7 @@ function AppelliDaMandare($stato, $wow) {
   foreach ($sv in Get-ChildItem -LiteralPath $acc -Directory | ForEach-Object { Join-Path $_.FullName 'SavedVariables\ERT.lua' }) {
     if (-not (Test-Path -LiteralPath $sv)) { continue }
     $t = [IO.File]::ReadAllText($sv)
-    foreach ($m in [regex]::Matches($t, '"(RC1\|[^"\\\r\n]*)"')) {
+    foreach ($m in [regex]::Matches($t, '"(R[CM]1\|[^"\\\r\n]*)"')) {
       $riga = $m.Groups[1].Value
       $req = $riga.Split('|')[1]
       if ($req -and -not (@($stato.inviati) -contains $req) -and -not $out.Contains($riga)) { $out.Add($riga) }
@@ -222,7 +231,7 @@ function MandaAppelli($cfg, $stato, $wow) {
   $r = Bot $cfg '/ponte/presenze' @{ righe = @($righe) }
   $nuovi = $false
   foreach ($p in $r.esiti.PSObject.Properties) {
-    Log ("appello {0}: {1}" -f $p.Name, $p.Value)
+    Log ("da ERT {0}: {1}" -f $p.Name, $p.Value)
     $stato.inviati = @(@($stato.inviati) + $p.Name | Select-Object -Last 60)
     $nuovi = $true
   }
@@ -478,37 +487,49 @@ $mutex = New-Object Threading.Mutex($false, 'Local\ERT-Ponte')
 if (-not $mutex.WaitOne(0)) { return } # gia' acceso
 Set-Content -LiteralPath (Join-Path $Qui 'pid.txt') -Value $PID
 Log "ERT-Ponte $VERSIONE acceso"
-$prossimiDati = [datetime]::MinValue
-$prossimoAddon = [datetime]::MinValue
 $prossimoScript = (Get-Date).AddMinutes(5)
+$sincronizza = $true   # all'avvio
+$manuale = $false
 $eraAperto = $false
 $attesaErrore = [datetime]::MinValue
+$statoScritto = ''
+function Rispondi([string]$t) { try { [IO.File]::WriteAllText($Esito, $t, (New-Object Text.UTF8Encoding($false))) } catch {} }
 while ($true) {
   try {
     $cfg = Config
     $stato = Stato
     $wow = Wow $stato
     $adesso = Get-Date
+    if (Test-Path -LiteralPath $Richiesta) {
+      Remove-Item -LiteralPath $Richiesta -Force -ErrorAction SilentlyContinue
+      $sincronizza = $true; $manuale = $true; $attesaErrore = [datetime]::MinValue
+    }
     if (-not $wow) {
-      if ($adesso -ge $prossimiDati) { Log "non trovo World of Warcraft: riapri ERT-Ponte.cmd per sceglierlo"; $prossimiDati = $adesso.AddMinutes(30) }
+      if ($sincronizza) {
+        Log "non trovo World of Warcraft: apri ERT-Ponte e premi Aggiorna e riavvia per sceglierlo"
+        if ($manuale) { Rispondi "Non trovo World of Warcraft." }
+        $sincronizza = $false; $manuale = $false
+      }
     } elseif ($adesso -ge $attesaErrore) {
       $aperto = WowAperto
-      # appena si apre WoW, e poi ogni 3 minuti finche' resta aperto; a gioco chiuso ogni 30 minuti
-      if (($aperto -and -not $eraAperto) -or $adesso -ge $prossimiDati) {
+      # niente controlli periodici col bot: solo all'avvio, quando si apre WoW e col bottone "Sincronizza ora"
+      if ($sincronizza -or ($aperto -and -not $eraAperto)) {
         if (MandaAppelli $cfg $stato $wow) { $stato.datiHash = $null }
-        ScriviDati $cfg $stato $wow | Out-Null
-        $prossimiDati = $adesso.AddMinutes($(if ($aperto) { 3 } else { 30 }))
+        $d = ScriviDati $cfg $stato $wow
+        $e = AggiornaAddon $cfg $stato $wow
+        if ($e -ne 'uguale') { Log "addon ERT $e"; ScriviDati $cfg $stato $wow | Out-Null }
+        if ($manuale) {
+          Log 'sincronizzato a mano'
+          Rispondi ("Sincronizzato alle {0}: {1} raid in programma, {2} di cui sei referente.{3} In gioco: /reload." -f (Get-Date -Format 'HH:mm'), @($d.eventi).Count, @($d.righe).Count, $(if ($e -ne 'uguale') { " Addon ERT $e." } else { '' }))
+        }
+        $sincronizza = $false; $manuale = $false
       } elseif (MandaAppelli $cfg $stato $wow) {
+        # appello o "Contatta su Discord" mandati: riscrivo i dati per la conferma in gioco (/reload)
         $stato.datiHash = $null
         ScriviDati $cfg $stato $wow | Out-Null
       }
       $eraAperto = $aperto
       MandaRicettari $cfg $stato $wow | Out-Null
-      if ($adesso -ge $prossimoAddon) {
-        $e = AggiornaAddon $cfg $stato $wow
-        if ($e -ne 'uguale') { Log "addon ERT $e" }
-        $prossimoAddon = $adesso.AddHours(6)
-      }
       if ($adesso -ge $prossimoScript) {
         # nuova versione di ERT-Ponte: la scarica, partira' alla prossima accensione
         $nuovo = (Invoke-WebRequest -Uri ($cfg.sito + '/ponte/ERT-Ponte.ps1') -UseBasicParsing -TimeoutSec 30).Content
@@ -519,14 +540,16 @@ while ($true) {
           [IO.File]::WriteAllText($Script, $nuovo, (New-Object Text.UTF8Encoding($false)))
           Log 'scaricata una versione nuova di ERT-Ponte: partira'' alla prossima accensione'
         }
-        $prossimoScript = $adesso.AddHours(12)
+        $prossimoScript = [datetime]::MaxValue # una volta sola per accensione
       }
     }
-    ScriviJson $StatoFile $stato
+    $j = $stato | ConvertTo-Json -Depth 6
+    if ($j -ne $statoScritto) { ScriviJson $StatoFile $stato; $statoScritto = $j }
   } catch {
     Log ("errore: {0}" -f $_.Exception.Message)
+    if ($manuale) { Rispondi ("Il bot non risponde ({0}): riprovo da solo tra 2 minuti." -f $_.Exception.Message); $manuale = $false }
     $attesaErrore = (Get-Date).AddMinutes(2)
   }
   if ($Una) { break }
-  Start-Sleep -Seconds 20
+  Start-Sleep -Seconds 5
 }
