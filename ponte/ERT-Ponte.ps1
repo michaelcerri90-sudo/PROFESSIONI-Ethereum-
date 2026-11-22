@@ -8,17 +8,18 @@
    - quando in gioco chiudi un appello (o premi "Contatta su Discord") e fai /reload (o esci), legge
      quello che ERT ha salvato (WTF\Account\*\SavedVariables\ERT.lua) e lo manda al bot;
    - installa l'addon ERT se manca e lo tiene aggiornato;
-   - ricettari: quando Mastercraft salva (/reload o uscita dal gioco), manda al bot le ricette dei tuoi
-     personaggi (solo ricette e livello di professione, niente oro o borse) e i ricettari sul sito si aggiornano.
+   - ricettari: dopo /reload o all'uscita dal gioco manda al bot le ricette dei tuoi personaggi, lette da ERT
+     (si segna ogni professione che apri), da Mastercraft e da ProEnchanters, e i ricettari sul sito si aggiornano
+     (solo ricette e livello di professione, niente oro o borse). Se piu' addon hanno la stessa professione vince la piu' recente.
      Un alt diventa un ricettario nuovo; le richieste di craft arrivano sempre a te su Discord.
 
-  Non tocca nient'altro: legge solo ERT.lua e Mastercraft.lua nelle SavedVariables e scrive solo nella cartella dell'addon ERT.
+  Non tocca nient'altro: legge solo ERT.lua, Mastercraft.lua e ProEnchanters.lua nelle SavedVariables (piu' l'elenco incantamenti di ProEnchanters) e scrive solo nella cartella dell'addon ERT.
   File: %LOCALAPPDATA%\ERT-Ponte (config.json = la tua chiave personale, ponte.log = cosa ha fatto).
   Per toglierlo: Disinstalla.cmd nella stessa cartella.
 #>
 param([switch]$Installa, [switch]$Disinstalla, [switch]$Una, [switch]$Collega, [switch]$DaExe, [switch]$Elenco)
 
-$VERSIONE = '1.6'
+$VERSIONE = '1.7'
 $BOT_BASE = 'https://professioniethereum.michael-cerri90.workers.dev'
 $SITO_BASE = 'https://michaelcerri90-sudo.github.io/PROFESSIONI-Ethereum-'
 $ErrorActionPreference = 'Stop'
@@ -249,7 +250,7 @@ function MandaAppelli($cfg, $stato, $wow) {
   return $nuovi
 }
 
-# ------------------------------------------------------------------ ricettari da Mastercraft.lua
+# ------------------------------------------------------------------ ricettari (ERT, Mastercraft, ProEnchanters)
 # Del file (che puo' essere di vari MB) servono solo le tabelle "recipes" e "chars": le ritaglio e le leggo qui.
 $RACCOLTA = @('Herbalism', 'Skinning', 'Fishing', 'Mining', 'First Aid')
 function Ritaglia([string]$t, [string]$chiave) {
@@ -334,6 +335,101 @@ function FileMastercraft($wow) {
   if (-not (Test-Path -LiteralPath $acc)) { return @() }
   return @(Get-ChildItem -LiteralPath $acc -Directory | ForEach-Object { Join-Path $_.FullName 'SavedVariables\Mastercraft.lua' } | Where-Object { Test-Path -LiteralPath $_ })
 }
+
+# --- ERT stesso (dalla 2.6): si segna le ricette quando apri una professione, con qualunque addon di professioni
+function FileErt($wow) {
+  $acc = Join-Path $wow 'WTF\Account'
+  if (-not (Test-Path -LiteralPath $acc)) { return @() }
+  return @(Get-ChildItem -LiteralPath $acc -Directory | ForEach-Object { Join-Path $_.FullName 'SavedVariables\ERT.lua' } | Where-Object { Test-Path -LiteralPath $_ })
+}
+function RicettariDaErt([string]$file) {
+  $t = [IO.File]::ReadAllText($file)
+  $rt = Ritaglia $t 'ricettari'
+  if (-not $rt) { return @() }
+  $tab = LuaLeggi $rt
+  $out = New-Object System.Collections.Generic.List[object]
+  foreach ($v in $tab.Values) {
+    if (-not ($v -is [hashtable]) -or -not $v['pg'] -or -not $v['prof'] -or $RACCOLTA -contains $v['prof']) { continue }
+    $rs = @(foreach ($riga in (Valori $v['r'])) {
+      $p = ([string]$riga).Split('|')
+      if ($p.Count -lt 6 -or -not $p[0]) { continue }
+      $q = 1; [void][int]::TryParse($p[4], [ref]$q); if ($q -lt 1) { $q = 1 }
+      @{ name = $p[0]; cat = $(if ($p[1]) { $p[1] } else { 'Ricette' }); known = ($p[2] -eq '1'); diff = $p[3]; qty = $q
+         reag = @(foreach ($m in $p[5].Split(',')) { if ($m -match '^(\d+):(\d+)$') { @{ id = [int]$Matches[1]; q = [int]$Matches[2] } } }) }
+    })
+    if ($rs.Count -eq 0) { continue }
+    $sc = Num $v 'scanned'; if (-not $sc) { $sc = 0 }
+    $out.Add(@{ pg = [string]$v['pg']; prof = [string]$v['prof']; livello = [string]$v['livello']; scanned = [int64]$sc; recipes = $rs; fonte = 'ERT' })
+  }
+  return $out.ToArray()
+}
+
+# --- ProEnchanters: per personaggio salva gli incantamenti imparati (filters = true); nomi e materiali
+#     stanno nel file dati dell'addon (Enchants_Forever.lua), con gli ID degli oggetti nei link
+function FileProEnchanters($wow) {
+  $acc = Join-Path $wow 'WTF\Account'
+  if (-not (Test-Path -LiteralPath $acc)) { return @() }
+  return @(Get-ChildItem -Path (Join-Path $acc '*\*\*\SavedVariables\ProEnchanters.lua') -File -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName })
+}
+$script:peCatalogo = $null
+function CatalogoProEnchanters($wow) {
+  if ($script:peCatalogo) { return $script:peCatalogo }
+  $cart = Join-Path $wow 'Interface\AddOns\ProEnchanters'
+  $file = @('Enchants_Forever.lua', 'Enchants_Vanilla.lua', 'Enchants.lua') | ForEach-Object { Join-Path $cart $_ } | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+  $cat = @{}
+  if (-not $file) { return $cat }
+  $t = [IO.File]::ReadAllText($file)
+  $ids = @{}
+  foreach ($m in [regex]::Matches($t, '(?m)^\s*local\s+(\w+)\s*=\s*"[^"\r\n]*?item:(\d+)')) { $ids[$m.Groups[1].Value] = [int]$m.Groups[2].Value }
+  $i = $t.IndexOf('CombinedEnchants = {')
+  if ($i -lt 0) { return $cat }
+  foreach ($m in [regex]::Matches($t.Substring($i), '(?s)(?<![\w"])(ENCH\d+) = \{\s*name = "((?:\\.|[^"\\])*)"(.*?)materials = \{([^}]*)\}')) {
+    $k = $m.Groups[1].Value
+    if ($cat.ContainsKey($k)) { continue }
+    $slot = if ($m.Groups[3].Value -match 'slot = "([^"]*)"') { $Matches[1] } else { 'Enchants' }
+    $reag = @(foreach ($x in [regex]::Matches($m.Groups[4].Value, '"(\d+)x "\s*\.\.\s*(\w+)')) {
+      $id = $ids[$x.Groups[2].Value]; if ($id) { @{ id = $id; q = [int]$x.Groups[1].Value } } })
+    $cat[$k] = @{ name = (LuaUnesc $m.Groups[2].Value); cat = $slot; reag = $reag }
+  }
+  $script:peCatalogo = $cat
+  return $cat
+}
+function RicettariDaProEnchanters($wow, [string]$file) {
+  $cat = CatalogoProEnchanters $wow
+  if ($cat.Count -eq 0) { return @() }
+  $t = [IO.File]::ReadAllText($file)
+  $noti = @{}
+  foreach ($m in [regex]::Matches($t, '\["(ENCH\d+)"\] = true')) { $noti[$m.Groups[1].Value] = $true }
+  if ($noti.Count -eq 0) { return @() }
+  $pg = ((Split-Path (Split-Path (Split-Path $file -Parent) -Parent) -Leaf) -split '-')[0]
+  $rs = @(foreach ($k in ($cat.Keys | Sort-Object { $cat[$_].name })) {
+    $e = $cat[$k]
+    @{ name = $e.name; cat = $e.cat; known = [bool]$noti[$k]; diff = ''; qty = 1; reag = $e.reag } })
+  $sc = [int64]([DateTimeOffset](Get-Item -LiteralPath $file).LastWriteTimeUtc).ToUnixTimeSeconds()
+  return @(@{ pg = $pg; prof = 'Enchanting'; livello = ''; scanned = $sc; recipes = $rs; fonte = 'ProEnchanters' })
+}
+
+# --- tutti i ricettari trovati: per personaggio e professione vince la lettura piu' recente tra ERT e Mastercraft;
+#     ProEnchanters (solo incantamento, senza livello) solo se nessuno dei due ha quella professione
+function FileRicettari($wow) { return @(FileErt $wow) + @(FileMastercraft $wow) + @(FileProEnchanters $wow) }
+function TuttiRicettari($wow) {
+  $scelti = [ordered]@{}
+  $metti = {
+    param($r, [bool]$riserva)
+    $k = $r.pg + '|' + $r.prof
+    $c = $scelti[$k]
+    if (-not $c) { $scelti[$k] = $r; return }
+    if ($riserva) { return }
+    if ($c.fonte -eq 'ProEnchanters' -or [int64]$r.scanned -gt [int64]$c.scanned) {
+      if (-not $r.livello -and $c.livello) { $r.livello = $c.livello }
+      $scelti[$k] = $r
+    } elseif (-not $c.livello -and $r.livello) { $c.livello = $r.livello }
+  }
+  foreach ($f in (FileErt $wow)) { try { foreach ($r in (RicettariDaErt $f)) { & $metti $r $false } } catch { Log ("ricettari ERT illeggibili: {0}" -f $_.Exception.Message) } }
+  foreach ($f in (FileMastercraft $wow)) { try { foreach ($r in (RicettariDa $f)) { $r.fonte = 'Mastercraft'; & $metti $r $false } } catch { Log ("Mastercraft illeggibile: {0}" -f $_.Exception.Message) } }
+  foreach ($f in (FileProEnchanters $wow)) { try { foreach ($r in (RicettariDaProEnchanters $wow $f)) { & $metti $r $true } } catch { Log ("ProEnchanters illeggibile: {0}" -f $_.Exception.Message) } }
+  return @($scelti.Values)
+}
 # scelta fatta nell'app: senza scelta si mandano tutti; con la scelta solo quelli spuntati (i nuovi aspettano la spunta)
 function Scelta { LeggiJson $SceltaFile $null }
 function Scelto($scelta, $r) {
@@ -342,31 +438,32 @@ function Scelto($scelta, $r) {
   return [bool]($p -and $p.Value -eq $true)
 }
 function Nuovo($scelta, $r) { return [bool]($scelta -and -not $scelta.PSObject.Properties[$r.pg + '|' + $r.prof]) }
-# per l'app: elenco dei ricettari trovati in Mastercraft.lua (scritto in elenco.json)
+# per l'app: elenco dei ricettari trovati (scritto in elenco.json)
 function ScriviElenco {
   $stato = Stato
   $wow = Wow $stato
   $scelta = Scelta
   $lista = @()
   if ($wow) {
-    $lista = @(foreach ($f in (FileMastercraft $wow)) { foreach ($r in (RicettariDa $f)) {
+    $lista = @(foreach ($r in (TuttiRicettari $wow)) {
       [pscustomobject]@{ pg = $r.pg; prof = $r.prof; livello = $r.livello; noti = @($r.recipes | Where-Object { $_.known }).Count
-                         scelto = (Scelto $scelta $r); nuovo = (Nuovo $scelta $r) } } })
+                         fonte = $r.fonte; scelto = (Scelto $scelta $r); nuovo = (Nuovo $scelta $r) } })
   }
   $out = [pscustomobject]@{ wow = $wow; scelta = [bool]$scelta; ricettari = $lista }
   [IO.File]::WriteAllText((Join-Path $Qui 'elenco.json'), ($out | ConvertTo-Json -Depth 4), (New-Object Text.UTF8Encoding($false)))
 }
-# quando Mastercraft.lua cambia (dopo /reload o all'uscita) o cambia la scelta nell'app, manda i ricettari al bot
+# quando un file dei ricettari cambia (dopo /reload o all'uscita) o cambia la scelta nell'app, manda i ricettari al bot
 function MandaRicettari($cfg, $stato, $wow, [switch]$Forza) {
   if ($cfg.ricettari -eq $false) { return $null }
-  $files = FileMastercraft $wow
+  $files = FileRicettari $wow
   if ($files.Count -eq 0) { return $null }
   $tempo = [string]($files | ForEach-Object { (Get-Item -LiteralPath $_).LastWriteTimeUtc.Ticks } | Measure-Object -Maximum).Maximum
   if (Test-Path -LiteralPath $SceltaFile) { $tempo += '|' + (Get-Item -LiteralPath $SceltaFile).LastWriteTimeUtc.Ticks }
   if (-not $Forza -and $tempo -eq [string]$stato.mcTempo) { return $null }
   $scelta = Scelta
-  $trovati = @(foreach ($f in $files) { RicettariDa $f })
-  $tutti = @($trovati | Where-Object { Scelto $scelta $_ })
+  $trovati = @(TuttiRicettari $wow)
+  if ($trovati.Count -eq 0) { $stato.mcTempo = $tempo; return $null }
+  $tutti = @($trovati | Where-Object { Scelto $scelta $_ } | ForEach-Object { $x = @{} + $_; $x.Remove('fonte'); $x })
   $nuovi = @($trovati | Where-Object { Nuovo $scelta $_ } | ForEach-Object { '{0} {1}' -f $_.pg, $_.prof })
   if ($nuovi.Count) { Log ("ricettari nuovi non ancora scelti (spuntali in ERT-Ponte): {0}" -f ($nuovi -join ', ')) }
   if ($tutti.Count -eq 0) {
@@ -462,11 +559,11 @@ if ($Installa) {
     Write-Host ("Collegato a Discord come {0} (personaggi: {1})" -f $d.nome, $pg) -ForegroundColor Green
     Write-Host ("Raid in programma: {0}; dove sei referente: {1}" -f @($d.eventi).Count, @($d.righe).Count)
     try {
-      Write-Host 'Ricettari: leggo Mastercraft.lua...'
+      Write-Host 'Ricettari: leggo ERT, Mastercraft e ProEnchanters...'
       $r = MandaRicettari $cfg $stato $wow -Forza
       if ($r -and @($r.esiti).Count -eq 0) { Write-Host 'Ricettari: nessuno scelto (spuntali nella lista se vuoi metterli sul sito).' }
       elseif ($r) { Write-Host ("Ricettari sincronizzati: {0}" -f (@($r.esiti | ForEach-Object { '{0} {1}' -f $_.pg, $_.prof }) -join ', ')) -ForegroundColor Green }
-      else { Write-Host 'Ricettari: Mastercraft.lua non trovato (se usi Mastercraft, apri le professioni in gioco e fai /reload).' }
+      else { Write-Host 'Ricettari: nessuno ancora (in gioco apri la finestra di ogni professione e fai /reload).' }
     } catch { Write-Host ("Ricettari: non riuscito ({0}); riprovo da solo" -f $_.Exception.Message) -ForegroundColor DarkYellow }
   } catch {
     Write-Host ("Il bot non risponde: {0}" -f $_.Exception.Message) -ForegroundColor Red
