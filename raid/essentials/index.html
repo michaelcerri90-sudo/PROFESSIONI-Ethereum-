@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Essentials Ethereum</title>
+<meta name="robots" content="noindex">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alegreya+SC:wght@500;700&family=Alegreya+Sans:wght@400;500;700&display=swap">
+<style>
+/* Layout: addon obbligatori (link CurseForge) e aure FA della gilda.
+   Senza link degli officer: sola lettura, con "Copia" per le stringhe FA.
+   Con il link degli officer (/essentials > Modifica liste): righe modificabili e Salva. */
+:root{
+  color-scheme:dark;
+  --bg:#0d1117; --panel:#151b24; --panel-2:#1c2430; --line:#2a3442; --ink:#e9e3d2; --muted:#9aa3ae;
+  --gold:#ffd000; --gold-soft:rgba(255,208,0,.14); --ok:#40c040; --bad:#ff6b5a;
+  --font-display:"Alegreya SC","Palatino Linotype",Georgia,serif;
+  --font-body:"Alegreya Sans","Segoe UI",system-ui,sans-serif;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{background:var(--bg)}
+body{margin:0;color:var(--ink);font-family:var(--font-body);font-size:16px;line-height:1.45;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:24px 48px}
+.wrap{max-width:720px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
+h1{font-family:var(--font-display);font-size:clamp(28px,5vw,40px);margin:0;line-height:1.1}
+h1 small{display:block;font-family:var(--font-body);font-size:14px;font-weight:500;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;margin-bottom:6px}
+h2{font-family:var(--font-display);font-size:22px;margin:0}
+p{margin:0}
+a{color:var(--gold)}
+.muted{color:var(--muted);font-size:14px}
+section{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:16px;display:flex;flex-direction:column;gap:10px}
+.addon{display:flex;align-items:baseline;gap:10px;padding:8px 10px;background:var(--bg);border:1px solid var(--line);border-radius:5px;flex-wrap:wrap}
+.addon .n{font-weight:700}
+.addon .c{font-size:13px;color:var(--muted)}
+.fa{display:flex;flex-direction:column;gap:6px;padding:10px;background:var(--bg);border:1px solid var(--line);border-radius:5px}
+.fa header{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.fa .n{font-weight:700;min-width:0;overflow-wrap:anywhere}
+textarea,input[type=text],input[type=url]{width:100%;background:var(--panel-2);color:var(--ink);border:1px solid var(--line);border-radius:4px;padding:8px 10px;font:inherit;font-size:14px}
+textarea{min-height:64px;resize:vertical;font-family:ui-monospace,Consolas,monospace;font-size:12px}
+.btn{background:var(--gold);color:#1a1400;border:0;border-radius:4px;padding:10px 16px;font:inherit;font-weight:700;cursor:pointer}
+.btn.piccolo{padding:6px 12px;font-size:14px}
+.btn.grigio{background:var(--panel-2);color:var(--ink);border:1px solid var(--line)}
+.btn.via{background:transparent;color:var(--bad);border:1px solid var(--line)}
+.btn:disabled{opacity:.45;cursor:default}
+.riga{display:grid;grid-template-columns:1fr 1.6fr .9fr auto;gap:8px;align-items:center}
+.rigafa{display:flex;flex-direction:column;gap:6px;padding:10px;background:var(--bg);border:1px solid var(--line);border-radius:5px}
+.rigafa .top{display:flex;gap:8px}
+@media (max-width:560px){ .riga{grid-template-columns:1fr auto} .riga input:nth-child(2),.riga input:nth-child(3){grid-column:1/-1} }
+.esito{padding:10px 12px;border-radius:4px;border:1px solid var(--line);background:var(--panel);overflow-wrap:anywhere}
+.esito.ok{border-color:var(--ok)} .esito.bad{border-color:var(--bad);color:var(--bad)}
+:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+</style>
+
+<div class="wrap">
+  <h1><small>Gilda Ethereum · WoW: Forever</small>Essentials</h1>
+  <p class="muted" id="sotto">Caricamento...</p>
+
+  <section id="secAddon">
+    <h2>Addon obbligatori</h2>
+    <p class="muted" id="addonAiuto">Installali e tienili aggiornati con l'app CurseForge (gioco: World of Warcraft, istanza Forever).</p>
+    <div id="addon" style="display:flex;flex-direction:column;gap:8px"></div>
+    <button class="btn grigio piccolo" type="button" id="piuAddon" hidden>+ Aggiungi addon</button>
+  </section>
+
+  <section id="secFa">
+    <h2>Aure FA (ForeverAuras)</h2>
+    <p class="muted" id="faAiuto">Con ERT-Ponte arrivano da sole in ERT (/ert essentials, un clic per importarle). Senza: premi Copia, in gioco apri ForeverAuras (/fa), Importa, incolla.</p>
+    <div id="fa" style="display:flex;flex-direction:column;gap:8px"></div>
+    <button class="btn grigio piccolo" type="button" id="piuFa" hidden>+ Aggiungi aura</button>
+  </section>
+
+  <button class="btn" type="button" id="salva" hidden>Salva le liste</button>
+  <div id="esito" class="esito" hidden></div>
+</div>
+
+<script src="../dati.js"></script>
+<script>
+const R = window.RAID;
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const h = new URLSearchParams(location.hash.slice(1));
+const g = (h.get("g") || "").replace(/\D/g, ""), token = h.get("t") || "";
+let DATI = { addons: [], fa: [] }, MODIFICA = false;
+
+function esito(testo, ok) { const x = $("esito"); x.hidden = false; x.className = "esito " + (ok ? "ok" : "bad"); x.textContent = testo; }
+
+function vista() {
+  $("addon").innerHTML = DATI.addons.length ? DATI.addons.map(a => `<div class="addon"><span class="n">${esc(a.n)}</span>
+    ${a.l ? `<a href="${esc(a.l)}" target="_blank" rel="noopener">CurseForge</a>` : ""}${a.c ? `<span class="c">cartella ${esc(a.c)}</span>` : ""}</div>`).join("")
+    : `<p class="muted">Gli officer non hanno ancora messo la lista.</p>`;
+  $("fa").innerHTML = DATI.fa.length ? DATI.fa.map((a, i) => `<div class="fa"><header><span class="n">${esc(a.n)}</span>
+    <button class="btn piccolo" type="button" data-copia="${i}">Copia</button></header>
+    <textarea readonly rows="2">${esc(a.s)}</textarea></div>`).join("")
+    : `<p class="muted">Ancora nessuna aura.</p>`;
+}
+document.addEventListener("click", async e => {
+  const b = e.target.closest("[data-copia]");
+  if (!b) return;
+  const a = DATI.fa[+b.dataset.copia];
+  try { await navigator.clipboard.writeText(a.s); } catch { const t = b.closest(".fa").querySelector("textarea"); t.select(); document.execCommand("copy"); }
+  b.textContent = "Copiata!"; setTimeout(() => b.textContent = "Copia", 1500);
+});
+
+// ---- modifica (officer)
+function rigaAddon(a = {}) {
+  const d = document.createElement("div"); d.className = "riga";
+  d.innerHTML = `<input type="text" placeholder="Nome" maxlength="60" value="${esc(a.n)}" data-k="n">
+    <input type="url" placeholder="https://www.curseforge.com/wow/addons/..." value="${esc(a.l)}" data-k="l">
+    <input type="text" placeholder="Cartella (facoltativa)" maxlength="60" value="${esc(a.c)}" data-k="c" title="Nome della cartella in Interface\\AddOns: ERT la usa per dire se manca">
+    <button class="btn via piccolo" type="button" aria-label="Togli">Togli</button>`;
+  d.querySelector(".via").onclick = () => d.remove();
+  $("addon").append(d);
+}
+function rigaFa(a = {}) {
+  const d = document.createElement("div"); d.className = "rigafa";
+  d.innerHTML = `<div class="top"><input type="text" placeholder="Nome dell'aura (es. Interrupt Tracker)" maxlength="80" value="${esc(a.n)}" data-k="n">
+    <button class="btn via piccolo" type="button">Togli</button></div>
+    <textarea placeholder="Stringa di export di ForeverAuras (incollala qui)" data-k="s">${esc(a.s)}</textarea>`;
+  d.querySelector(".via").onclick = () => d.remove();
+  $("fa").append(d);
+}
+function modifica() {
+  $("addon").innerHTML = ""; $("fa").innerHTML = "";
+  DATI.addons.forEach(rigaAddon); DATI.fa.forEach(rigaFa);
+  if (!DATI.addons.length) rigaAddon();
+  $("addonAiuto").textContent = "Nome, link CurseForge e (se vuoi) la cartella in Interface\\AddOns: ERT la usa per dire a ognuno se l'addon gli manca.";
+  $("faAiuto").textContent = "Nome e stringa di export (in ForeverAuras: tasto destro sull'aura > Esporta). Chi ha ERT-Ponte la riceve da solo, con la scritta 'aggiornata' se la cambi.";
+  $("piuAddon").hidden = $("piuFa").hidden = $("salva").hidden = false;
+}
+$("piuAddon").onclick = () => rigaAddon();
+$("piuFa").onclick = () => rigaFa();
+const valori = sel => [...document.querySelectorAll(sel)].map(r => Object.fromEntries([...r.querySelectorAll("[data-k]")].map(x => [x.dataset.k, x.value.trim()])));
+$("salva").onclick = async () => {
+  const corpo = { t: token, g, addons: valori("#addon .riga").filter(a => a.n), fa: valori("#fa .rigafa").filter(a => a.n && a.s) };
+  $("salva").disabled = true; esito("Salvo...", true);
+  try {
+    const r = await fetch(R.RELAY + "/raid/essentials", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo) });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.errore || r.status);
+    esito(`Salvato: ${d.addons} addon e ${d.fa} aure. Chi ha ERT-Ponte le riceve alla prossima sincronizzazione; gli altri con /essentials.`, true);
+  } catch (err) { esito("Non salvato: " + err.message, false); }
+  $("salva").disabled = false;
+};
+
+(async () => {
+  if (!g) { $("sotto").innerHTML = "Serve il link del bot: su Discord scrivi <b>/essentials</b>."; $("secAddon").hidden = $("secFa").hidden = true; return; }
+  try {
+    if (token) {
+      const r = await fetch(`${R.RELAY}/raid/essentials?t=${encodeURIComponent(token)}&g=${g}`);
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.errore || r.status);
+      DATI = d; MODIFICA = true;
+      $("sotto").textContent = "Modalita' officer: cambia le liste e premi Salva.";
+      modifica();
+    } else {
+      const r = await fetch(`${R.RELAY}/essentials?g=${g}`);
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.errore || r.status);
+      DATI = d;
+      $("sotto").textContent = d.agg ? `Aggiornate il ${new Date(d.agg * 1000).toLocaleDateString("it-IT", { timeZone: "Europe/Rome" })}${d.da ? " da " + d.da : ""}.` : "Le liste della gilda.";
+      vista();
+    }
+  } catch (err) { $("sotto").textContent = "Non riesco ad aprire le liste: " + err.message; }
+})();
+</script>
+
+</html>

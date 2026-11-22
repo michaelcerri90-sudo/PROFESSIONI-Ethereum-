@@ -18,7 +18,7 @@
 #>
 param([switch]$Installa, [switch]$Disinstalla, [switch]$Una, [switch]$Collega, [switch]$DaExe, [switch]$Elenco)
 
-$VERSIONE = '1.5'
+$VERSIONE = '1.6'
 $BOT_BASE = 'https://professioniethereum.michael-cerri90.workers.dev'
 $SITO_BASE = 'https://michaelcerri90-sudo.github.io/PROFESSIONI-Ethereum-'
 $ErrorActionPreference = 'Stop'
@@ -189,6 +189,17 @@ function TestoDati($d, $stato) {
   foreach ($x in @($d.tutti)) {
     if ($x) { $l.Add('    { id = ' + (LuaStr $x.id) + ', ev = ' + (LuaStr $x.ev) + ', nome = ' + (LuaStr $x.nome) + ', refs = ' + (LuaStr $x.refs) + ', v = ' + (LuaStr $x.v) + ', ts = ' + (LuaNum $x.ts) + ' },') }
   }
+  $l.Add('  },')
+  # essentials della gilda: addon obbligatori (link CurseForge) e aure FA da importare in ForeverAuras
+  $e = $d.essentials
+  $l.Add('  essentials = {')
+  $l.Add('    agg = ' + (LuaNum $(if ($e -and $e.agg) { $e.agg } else { 0 })) + ',')
+  $l.Add('    addons = {')
+  foreach ($a in @($e.addons)) { if ($a) { $l.Add('      { n = ' + (LuaStr $a.n) + ', l = ' + (LuaStr $a.l) + ', c = ' + (LuaStr $a.c) + ' },') } }
+  $l.Add('    },')
+  $l.Add('    fa = {')
+  foreach ($a in @($e.fa)) { if ($a) { $l.Add('      { n = ' + (LuaStr $a.n) + ', v = ' + (LuaStr $a.v) + ', s = ' + (LuaStr $a.s) + ' },') } }
+  $l.Add('    },')
   $l.Add('  },')
   $l.Add('  inviati = { ' + ((@($stato.inviati) | ForEach-Object { LuaStr $_ }) -join ', ') + ' },')
   $l.Add('  annullati = { ' + ((@($d.annullati) | Where-Object { $_ } | ForEach-Object { LuaStr $_ }) -join ', ') + ' },')
