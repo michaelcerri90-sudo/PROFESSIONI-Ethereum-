@@ -15,9 +15,9 @@
   File: %LOCALAPPDATA%\ERT-Ponte (config.json = la tua chiave personale, ponte.log = cosa ha fatto).
   Per toglierlo: Disinstalla.cmd nella stessa cartella.
 #>
-param([switch]$Installa, [switch]$Disinstalla, [switch]$Una, [switch]$Collega)
+param([switch]$Installa, [switch]$Disinstalla, [switch]$Una, [switch]$Collega, [switch]$DaExe)
 
-$VERSIONE = '1.2'
+$VERSIONE = '1.3'
 $BOT_BASE = 'https://professioniethereum.michael-cerri90.workers.dev'
 $SITO_BASE = 'https://michaelcerri90-sudo.github.io/PROFESSIONI-Ethereum-'
 $ErrorActionPreference = 'Stop'
@@ -416,8 +416,14 @@ if ($Installa) {
     return
   }
   ScriviJson $StatoFile $stato
-  CreaAvvio
   FermaVecchio
+  if ($DaExe) {
+    # avvio automatico e programma in background li gestisce ERT-Ponte.exe (senza finestre)
+    Write-Host ''
+    Write-Host 'Fatto. ERT-Ponte lavora in background e parte da solo a ogni accensione del PC.' -ForegroundColor Green
+    return
+  }
+  CreaAvvio
   Start-Process -FilePath (Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe') -WindowStyle Hidden `
     -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-File', ('"' + $Script + '"'))
   Write-Host ''
