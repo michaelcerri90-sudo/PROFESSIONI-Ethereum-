@@ -34,7 +34,7 @@ window.RAID = (function () {
     ["PALADIN", "prot", "Protection", "T", "spell_holy_devotionaura"],
     ["PALADIN", "ret", "Retribution", "M", "spell_holy_auraoflight"],
     ["PRIEST", "disc", "Discipline", "H", "spell_holy_wordfortitude"],
-    ["PRIEST", "holy", "Holy", "H", "spell_holy_holybolt"],
+    ["PRIEST", "holy", "Holy", "H", "spell_holy_guardianspirit"],
     ["PRIEST", "shadow", "Shadow", "R", "spell_shadow_shadowwordpain"],
     ["ROGUE", "assa", "Assassination", "M", "ability_rogue_eviscerate"],
     ["ROGUE", "combat", "Combat", "M", "ability_backstab"],
