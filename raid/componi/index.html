@@ -25,6 +25,8 @@ h1{font-family:var(--font-display);font-size:clamp(26px,4vw,38px);margin:0;line-
 h1 small{display:block;font-family:var(--font-body);font-size:14px;font-weight:500;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;margin-bottom:4px}
 h2{font-family:var(--font-display);font-size:18px;margin:0}
 h3{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:10px 0 4px;font-weight:500;display:flex;justify-content:space-between}
+h4{font-size:12px;margin:6px 0 3px 8px;font-weight:600;display:flex;justify-content:space-between}
+h4 span{color:var(--muted);font-weight:400}
 p{margin:0}
 .muted{color:var(--muted);font-size:13px}
 .barra{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
@@ -248,10 +250,16 @@ function disegnaPool() {
   const ordina = l => l.sort((a, b) => iscritto(a).nome.localeCompare(iscritto(b).nome));
   let html = sezione("Tank", ordina(tutti.filter(u => ruoloMain(u) === "T"))) + sezione("Healer", ordina(tutti.filter(u => ruoloMain(u) === "H")));
   const dps = tutti.filter(u => ["M", "R"].includes(ruoloMain(u)));
-  // DPS per classe, divisi in melee e ranged secondo la spec principale (es. Druid balance tra i ranged, feral tra i melee)
-  for (const [k, c] of Object.entries(R.CLASSI)) for (const [ru, nr] of [["M", "Melee"], ["R", "Ranged"]]) {
-    const l = dps.filter(u => iscritto(u).classe === k && ruoloMain(u) === ru);
-    if (l.length) html += sezione(`${c.nome} · ${nr}`, l.sort((a, b) => specDi(a).localeCompare(specDi(b)) || iscritto(a).nome.localeCompare(iscritto(b).nome)));
+  // DPS divisi in Melee e Ranged secondo la spec principale (es. Druid balance tra i ranged, feral tra i melee), poi per classe
+  for (const [ru, nr] of [["M", "Melee"], ["R", "Ranged"]]) {
+    const qui = dps.filter(u => ruoloMain(u) === ru);
+    if (!qui.length) continue;
+    html += `<h3>${nr}<span>${qui.length}</span></h3>`;
+    for (const [k, c] of Object.entries(R.CLASSI)) {
+      const l = qui.filter(u => iscritto(u).classe === k);
+      if (l.length) html += `<h4 style="color:${c.colore}">${esc(c.nome)}<span>${l.length}</span></h4>`
+        + l.sort((a, b) => specDi(a).localeCompare(specDi(b)) || iscritto(a).nome.localeCompare(iscritto(b).nome)).map(u => chip(u, { pool: true })).join("");
+    }
   }
   const assenti = Object.values(EV.iscritti).filter(x => x.stato === "no");
   if (assenti.length) html += `<h3>Assenti<span>${assenti.length}</span></h3><p class="muted">${assenti.map(x => esc((Object.values(x.per || {}).find(Boolean) || x.pg || {}).nome || x.discord)).join(", ")}</p>`;
