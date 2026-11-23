@@ -25,8 +25,8 @@ h1{font-family:var(--font-display);font-size:clamp(26px,4vw,38px);margin:0;line-
 h1 small{display:block;font-family:var(--font-body);font-size:17px;font-weight:500;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;margin-bottom:4px}
 h2{font-family:var(--font-display);font-size:22px;margin:0}
 h3{font-size:14px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:10px 0 4px;font-weight:500;display:flex;justify-content:space-between}
-h4{font-size:14px;margin:6px 0 3px 8px;font-weight:600;display:flex;justify-content:space-between}
-h4 span{color:var(--muted);font-weight:400}
+h4.banner{font-size:14px;margin:10px 0 5px;padding:4px 10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;display:flex;justify-content:space-between;align-items:center;color:var(--cc);border-left:4px solid var(--cc);border-radius:4px;background:color-mix(in srgb,var(--cc) 18%,transparent)}
+h4.banner span{color:var(--ink);font-weight:500;letter-spacing:0}
 p{margin:0}
 .muted{color:var(--muted);font-size:16px}
 .barra{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
@@ -250,16 +250,12 @@ function disegnaPool() {
   const ordina = l => l.sort((a, b) => iscritto(a).nome.localeCompare(iscritto(b).nome));
   let html = sezione("Tank", ordina(tutti.filter(u => ruoloMain(u) === "T"))) + sezione("Healer", ordina(tutti.filter(u => ruoloMain(u) === "H")));
   const dps = tutti.filter(u => ["M", "R"].includes(ruoloMain(u)));
-  // DPS divisi in Melee e Ranged secondo la spec principale (es. Druid balance tra i ranged, feral tra i melee), poi per classe
-  for (const [ru, nr] of [["M", "Melee"], ["R", "Ranged"]]) {
-    const qui = dps.filter(u => ruoloMain(u) === ru);
-    if (!qui.length) continue;
-    html += `<h3>${nr}<span>${qui.length}</span></h3>`;
-    for (const [k, c] of Object.entries(R.CLASSI)) {
-      const l = qui.filter(u => iscritto(u).classe === k);
-      if (l.length) html += `<h4 style="color:${c.colore}">${esc(c.nome)}<span>${l.length}</span></h4>`
-        + l.sort((a, b) => specDi(a).localeCompare(specDi(b)) || iscritto(a).nome.localeCompare(iscritto(b).nome)).map(u => chip(u, { pool: true })).join("");
-    }
+  // DPS tutti insieme (melee e ranged), divisi per classe: ogni classe ha il suo banner col colore della classe
+  if (dps.length) html += `<h3>DPS<span>${dps.length}</span></h3>`;
+  for (const [k, c] of Object.entries(R.CLASSI)) {
+    const l = dps.filter(u => iscritto(u).classe === k);
+    if (l.length) html += `<h4 class="banner" style="--cc:${c.colore}">${esc(c.nome)}<span>${l.length}</span></h4>`
+      + l.sort((a, b) => specDi(a).localeCompare(specDi(b)) || iscritto(a).nome.localeCompare(iscritto(b).nome)).map(u => chip(u, { pool: true })).join("");
   }
   const assenti = Object.values(EV.iscritti).filter(x => x.stato === "no");
   if (assenti.length) html += `<h3>Assenti<span>${assenti.length}</span></h3><p class="muted">${assenti.map(x => esc((Object.values(x.per || {}).find(Boolean) || x.pg || {}).nome || x.discord)).join(", ")}</p>`;
