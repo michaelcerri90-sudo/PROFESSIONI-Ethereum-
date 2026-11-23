@@ -107,7 +107,7 @@ const h = new URLSearchParams(location.hash.slice(1));
 const token = h.get("t") || "", cid = h.get("c") || "";
 const oggi = new Date(); oggi.setHours(0, 0, 0, 0);
 const iso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-const sigla = id => R.RAID.find(r => r.id === id).nome.split(/\s+/).map(w => w[0]).join("").toUpperCase();
+const sigla = id => R.RAID.find(r => r.id === id).sigla || R.RAID.find(r => r.id === id).nome.split(/\s+/).map(w => w[0]).join("").toUpperCase();
 const nomeRaid = id => R.RAID.find(r => r.id === id).nome;
 let scelto = "hyjal", mese = new Date(oggi.getFullYear(), oggi.getMonth(), 1), inCorso = false;
 let voci = []; // { k, raid, data, stato: ""|"ok"|"bad", msg } - gli orari sono quelli della serata, uguali per tutti

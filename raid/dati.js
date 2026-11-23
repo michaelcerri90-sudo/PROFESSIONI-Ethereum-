@@ -107,7 +107,7 @@ window.RAID = (function () {
     { id: "barrow", nome: "Barrow Deeps", taglia: 10 },
     { id: "hyjal", nome: "Hyjal Summit", taglia: 20 },
     { id: "onyxia", nome: "Onyxia's Lair", taglia: 40 },
-    { id: "ubrs", nome: "Upper Blackrock Spire", taglia: 10 },
+    { id: "ubrs", nome: "Upper Blackrock Spire", taglia: 10, sigla: "UBRS" },
   ];
   return { ICO, CLASSI, SPEC, specPer, BUFF, buffDi, RUOLI, TIPI, RAID, RELAY: "https://professioniethereum.michael-cerri90.workers.dev" };
 })();

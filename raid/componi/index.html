@@ -160,7 +160,7 @@ const infoSpec = k => R.specPer[k] || { nome: "?", ruolo: "M", classe: "" };
 const colore = u => (R.CLASSI[iscritto(u).classe] || {}).colore || "#999";
 const icona = (n, titolo) => `<img class="ic" src="${R.ICO(n)}" alt="" title="${esc(titolo)}" loading="lazy">`;
 const raidDi = t => (EV.raids || []).find(r => r.k === t.k) || null;
-const sigla = r => r.raidNome.split(/\s+/).map(w => w[0]).join("").toUpperCase();
+const sigla = r => ((R.RAID.find(x => x.nome === r.raidNome) || {}).sigla) || r.raidNome.split(/\s+/).map(w => w[0]).join("").toUpperCase();
 const oraIt = ts => new Date(ts * 1000).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Rome" });
 // "Cornelius, Karithan" / "Cornelius Karithan" -> ["Cornelius", "Karithan"] (nomi dei personaggi in gioco)
 const referenti = t => [...new Set(String(t || "").split(/[\s,;\/+|]+/).map(x => x.replace(/[^\p{L}\p{M}'-]/gu, "")).filter(Boolean))].slice(0, 6);
