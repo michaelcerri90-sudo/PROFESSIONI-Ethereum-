@@ -397,6 +397,9 @@ $("bozza").onclick = async () => {
 };
 $("pubblica").onclick = () => {
   if (!comp.raids.some(r => r.gruppi.flat().some(Boolean))) return esito("Metti almeno un giocatore in un raid prima di pubblicare.", false);
+  // senza referenti gli inviti automatici in gioco li fa solo l'ERT di chi pubblica
+  const senza = comp.raids.filter(r => r.gruppi.flat().some(Boolean) && !String(r.ref || "").trim()).map(r => raidDi(r) ? raidDi(r).raidNome : "un raid");
+  if (senza.length && !confirm(`${senza.join(", ")}: nessun referente.\n\nGli inviti automatici in gioco (ERT) li farai solo tu, dal tuo personaggio. Pubblico lo stesso?\n\n(Annulla e scegli i referenti nella tendina "Referenti" del raid.)`)) return;
   if (!$("consumabili").value) $("consumabili").value = "- Flask o elisir principale\n- Pozioni di cura e di mana\n- Cibo con buff\n- Bende\n- Reagenti per i buff (candele, polveri)";
   $("dlg").showModal();
 };

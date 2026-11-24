@@ -19,7 +19,7 @@
 #>
 param([switch]$Installa, [switch]$Disinstalla, [switch]$Una, [switch]$Collega, [switch]$DaExe, [switch]$Elenco)
 
-$VERSIONE = '1.7'
+$VERSIONE = '1.8'
 $BOT_BASE = 'https://professioniethereum.michael-cerri90.workers.dev'
 $SITO_BASE = 'https://michaelcerri90-sudo.github.io/PROFESSIONI-Ethereum-'
 $ErrorActionPreference = 'Stop'
@@ -124,9 +124,18 @@ function WowAperto {
 function Bot($cfg, [string]$percorso, $corpo) {
   $h = @{ Authorization = 'Ponte ' + $cfg.token; 'User-Agent' = 'ERT-Ponte/' + $VERSIONE }
   $url = $cfg.bot + $percorso
-  if ($null -eq $corpo) { return Invoke-RestMethod -Uri $url -Headers $h -TimeoutSec 30 -UseBasicParsing }
-  $b = [Text.Encoding]::UTF8.GetBytes(($corpo | ConvertTo-Json -Depth 5 -Compress))
-  return Invoke-RestMethod -Uri $url -Method Post -Headers $h -Body $b -ContentType 'application/json; charset=utf-8' -TimeoutSec 30 -UseBasicParsing
+  $p = @{ Uri = $url; Headers = $h; TimeoutSec = 30; UseBasicParsing = $true }
+  if ($null -ne $corpo) {
+    $p.Method = 'Post'; $p.ContentType = 'application/json; charset=utf-8'
+    $p.Body = [Text.Encoding]::UTF8.GetBytes(($corpo | ConvertTo-Json -Depth 5 -Compress))
+  }
+  # la risposta si legge sempre come UTF-8: senza charset nell'intestazione Windows PowerShell la leggerebbe
+  # come Latin-1 e gli accenti ("DÃ´sphal") arriverebbero rotti in ERT_Dati.lua
+  $r = Invoke-WebRequest @p
+  $ms = New-Object IO.MemoryStream
+  $r.RawContentStream.Position = 0
+  $r.RawContentStream.CopyTo($ms)
+  return ([Text.Encoding]::UTF8.GetString($ms.ToArray()) | ConvertFrom-Json)
 }
 
 # ------------------------------------------------------------------ addon ERT
@@ -188,7 +197,7 @@ function TestoDati($d, $stato) {
   # versione di tutti i raid pubblicati: ERT la passa in gilda ai referenti ("aggiornato" / "non importato")
   $l.Add('  tutti = {')
   foreach ($x in @($d.tutti)) {
-    if ($x) { $l.Add('    { id = ' + (LuaStr $x.id) + ', ev = ' + (LuaStr $x.ev) + ', nome = ' + (LuaStr $x.nome) + ', refs = ' + (LuaStr $x.refs) + ', v = ' + (LuaStr $x.v) + ', ts = ' + (LuaNum $x.ts) + ' },') }
+    if ($x) { $l.Add('    { id = ' + (LuaStr $x.id) + ', ev = ' + (LuaStr $x.ev) + ', nome = ' + (LuaStr $x.nome) + ', refs = ' + (LuaStr $x.refs) + ', v = ' + (LuaStr $x.v) + ', ts = ' + (LuaNum $x.ts) + ', da = ' + (LuaStr $x.da) + ', pub = ' + $(if ($x.pub) { 'true' } else { 'false' }) + ' },') }
   }
   $l.Add('  },')
   # essentials della gilda: addon obbligatori (link CurseForge) e aure FA da importare in ForeverAuras
