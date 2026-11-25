@@ -41,6 +41,7 @@ p{margin:0}
 @media (max-width:900px){.pool{position:static;max-height:none}}
 .chip{display:flex;align-items:center;gap:7px;padding:6px 8px;border-radius:4px;background:var(--bg);border:1px solid var(--line);border-left:4px solid var(--c);cursor:pointer;min-width:0;margin-bottom:4px;user-select:none}
 .chip.sel{outline:2px solid var(--gold)}
+.chip img{-webkit-user-drag:none;user-select:none}
 .chip.messo{opacity:.4;filter:grayscale(1)}
 .chip.pool{flex-direction:column;align-items:stretch;gap:3px}
 .chip .r1{display:flex;align-items:center;gap:5px;min-width:0}
@@ -55,8 +56,8 @@ p{margin:0}
 .refsel{position:relative;font-size:16px}
 .refsel summary{cursor:pointer;list-style:none;padding:4px 8px;border:1px solid var(--line);border-radius:4px;background:var(--bg);max-width:260px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .refsel summary::after{content:" ▾";color:var(--muted)}
-.refsel .menu{position:absolute;z-index:5;top:calc(100% + 4px);left:0;background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:6px;min-width:220px;max-height:280px;overflow:auto;box-shadow:0 8px 20px rgba(0,0,0,.5)}
-.refsel .menu label{flex-direction:row;align-items:center;gap:6px;color:var(--ink);font-size:17px;padding:3px 2px;cursor:pointer}
+.refsel .menu{position:absolute;z-index:5;top:calc(100% + 4px);left:0;background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:6px;min-width:220px;width:max-content;max-width:min(520px,90vw);max-height:280px;overflow:auto;box-shadow:0 8px 20px rgba(0,0,0,.5)}
+.refsel .menu label{flex-direction:row;align-items:center;gap:6px;white-space:nowrap;color:var(--ink);font-size:17px;padding:3px 2px;cursor:pointer}
 .refsel .menu small{color:var(--muted)}
 .chip.fuori{border-style:dashed;border-left-style:solid;background:repeating-linear-gradient(135deg,var(--bg) 0 6px,#1a1210 6px 12px)}
 .raid header .ref{flex-direction:row;align-items:center;gap:6px;font-size:16px}
@@ -375,7 +376,8 @@ document.addEventListener("click", e => {
   if (c) { sel = sel && sel.u === c.dataset.u ? null : { u: c.dataset.u, da: origine(c) }; disegna(); }
 });
 // trascina e lascia
-document.addEventListener("dragstart", e => { const c = e.target.closest(".chip"); if (c) { e.dataTransfer.setData("text/plain", c.dataset.u); sel = { u: c.dataset.u, da: origine(c) }; } });
+// si trascina sempre la casella intera del giocatore, anche partendo da un'icona (buff, spec) dentro la casella
+document.addEventListener("dragstart", e => { const c = e.target.closest && e.target.closest(".chip"); if (c) { e.dataTransfer.setData("text/plain", c.dataset.u); e.dataTransfer.setDragImage(c, 12, 12); sel = { u: c.dataset.u, da: origine(c) }; } });
 document.addEventListener("dragover", e => { const t = e.target.closest("[data-slot], [data-panca], #pool"); if (t) { e.preventDefault(); t.classList.add("over"); } });
 document.addEventListener("dragleave", e => { const t = e.target.closest("[data-slot], [data-panca]"); if (t) t.classList.remove("over"); });
 document.addEventListener("drop", e => {
