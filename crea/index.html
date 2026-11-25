@@ -29,6 +29,7 @@ p{margin:0}
 .step[aria-disabled="true"]{opacity:.45;pointer-events:none}
 .num{color:var(--gold);font-variant-numeric:tabular-nums;margin-right:8px}
 .muted{color:var(--muted);font-size:14px}
+.addon-lista{margin:8px 0 6px;padding-left:20px;display:flex;flex-direction:column;gap:4px}
 code{background:var(--bg);border:1px solid var(--line);border-radius:3px;padding:1px 5px;font-size:13px;overflow-wrap:anywhere}
 .drop{border:2px dashed var(--line);border-radius:6px;padding:22px;text-align:center;cursor:pointer;display:flex;flex-direction:column;gap:6px;align-items:center}
 .drop:hover,.drop.over{border-color:var(--gold);background:var(--gold-soft)}
@@ -61,9 +62,15 @@ label.scelta{flex-direction:row;color:var(--ink);font-size:16px}
   <p id="saluto" class="muted"></p>
 
   <section class="step" id="s1">
-    <h2><span class="num">1</span>Carica Mastercraft.lua</h2>
-    <p class="muted">Prima, in gioco: apri la finestra di ogni professione da mostrare e scrivi <code>/reload</code>. Il file e' in<br>
-      <code>World of Warcraft\_forever_\WTF\Account\NOME_ACCOUNT\SavedVariables\Mastercraft.lua</code></p>
+    <h2><span class="num">1</span>Carica ERT.lua o Mastercraft.lua</h2>
+    <p class="muted">Prima, in gioco: apri la finestra di ogni professione da mostrare e scrivi <code>/reload</code>. Poi carica uno di questi file, dalla cartella<br>
+      <code>World of Warcraft\_forever_\WTF\Account\NOME_ACCOUNT\SavedVariables\</code></p>
+    <ul class="muted addon-lista">
+      <li><b>ERT.lua</b> (addon ERT della gilda, versione 2.6 o piu' nuova): va bene con <b>qualunque addon di professioni, o anche senza</b>, perche' ERT legge la finestra della professione del gioco.</li>
+      <li><b>Mastercraft.lua</b> (addon Mastercraft): letto cosi' com'e'.</li>
+      <li><b>ProEnchanters</b>: i suoi incantamenti li legge solo <b>ERT-Ponte</b>, da solo (qui non si carica).</li>
+    </ul>
+    <p class="muted">Con ERT-Ponte sul PC non serve caricare niente: i ricettari si aggiornano da soli dopo ogni <code>/reload</code>.</p>
     <div class="ultimo" id="ultimo" hidden><button class="btn" type="button" id="ricarica">Ricarica l'ultimo file</button><span class="muted" id="ultimoNome"></span></div>
     <label class="drop" id="drop" for="file">
       <input type="file" id="file" accept=".lua">
@@ -202,10 +209,31 @@ const valori = t => Object.keys(t || {}).sort((a, b) => a - b).map(k => t[k]);
 
 // --- dal file alle scelte ---
 let opzioni = [];
+// ERT.lua (addon della gilda, dalla 2.6): ogni professione aperta in gioco, con qualunque addon di professioni (o nessuno).
+// Righe "nome|categoria|1/0 imparata|colore|quantita'|id:q,id:q": le trasformo nei record come quelli di Mastercraft.
+function daErt(db) {
+  const out = [];
+  for (const v of Object.values(db.ricettari || {})) {
+    if (!v || !v.pg || !v.prof || RACCOLTA.includes(v.prof)) continue;
+    const lista = valori(v.r).filter(Boolean).map(riga => {
+      const p = String(riga).split("|");
+      return { name: p[0], category: p[1] || "Ricette", learned: p[2] === "1", diff: p[3] || "", outputQty: +p[4] || 1,
+        reagents: Object.fromEntries((p[5] || "").split(",").filter(Boolean).map((x, k) => { const [id, q] = x.split(":"); return [k + 1, { itemID: +id, qty: +q || 1 }]; })) };
+    }).filter(r => r.name);
+    if (!lista.length) continue;
+    out.push({ guid: v.pg, pg: v.pg, realm: "", prof: v.prof, lista, noti: lista.filter(r => r.learned).length, totale: lista.length,
+      livello: v.livello || "", scanned: v.scanned || 0 });
+  }
+  return out.sort((a, b) => b.noti - a.noti);
+}
 function analizza(testo) {
   const g = leggiLua(testo);
+  if (g.ERTDB) {
+    if (!g.ERTDB.ricettari) throw new Error("in ERT.lua non ci sono ancora professioni: serve ERT 2.6 o piu' nuovo; in gioco apri la finestra di ogni professione e fai /reload");
+    return daErt(g.ERTDB);
+  }
   const db = g.MastercraftDB;
-  if (!db || !db.recipes) throw new Error("questo non sembra il file di Mastercraft (manca MastercraftDB)");
+  if (!db || !db.recipes) throw new Error("questo non e' ne' Mastercraft.lua ne' ERT.lua (manca MastercraftDB / ERTDB)");
   const out = [];
   for (const [guid, profs] of Object.entries(db.recipes)) {
     const ch = (db.chars || {})[guid] || {};
